@@ -47,7 +47,10 @@ application refuse to become ready.
 
 ## Docker Compose
 
-Requires Docker with Compose v2. Pick a directory and create the master key:
+Requires Docker with Compose v2. MongoDB shares the host's Linux kernel, and MongoDB 8.0 refuses to
+start on kernels 6.19 to 7.0.13 because of a kernel bug (see
+[SERVER-125742](https://jira.mongodb.org/browse/SERVER-125742)); check `uname -r` and use a kernel
+older than 6.19 or 7.0.14 and newer. Pick a directory and create the master key:
 
 ```sh
 mkdir open-kase && cd open-kase
@@ -79,7 +82,7 @@ name: open-kase
 
 services:
   mongo:
-    image: mongo:8.0.32
+    image: mongo:8.0.34
     restart: unless-stopped
     # Install the keyfile with the ownership and mode mongod requires, then
     # hand over to the official entrypoint.

@@ -96,7 +96,7 @@ dependencies are pinned in `ui/package-lock.json` and not listed here.
 
 | Component | Version | License |
 | --- | --- | --- |
-| MongoDB Community Server | 8.0.32 | SSPL-1.0 (run as a separate service, not distributed with open-kase) |
+| MongoDB Community Server | 8.0.34 | SSPL-1.0 (run as a separate service, not distributed with open-kase) |
 | MongoDB Database Tools (`mongodump`, `mongorestore`) | 100.19.1 | Apache-2.0 |
 | mongosh | 2.12.0 | Apache-2.0 |
 | Redis (Ubuntu 24.04 package on the dev host) | 7.0.15 | BSD-3-Clause |

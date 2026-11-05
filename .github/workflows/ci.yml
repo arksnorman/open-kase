@@ -19,7 +19,9 @@ concurrency:
 jobs:
   api:
     name: API (Go)
-    runs-on: ubuntu-24.04
+    # MongoDB 8.0 refuses to start on Linux 6.19 to 7.0.13 (a kernel rseq bug, SERVER-125742),
+    # which the ubuntu-24.04 runners now use; 22.04 runners still have an older kernel.
+    runs-on: ubuntu-22.04
     timeout-minutes: 90
     defaults:
       run:
@@ -55,7 +57,7 @@ jobs:
             echo "::error title=MongoDB::$1 | container: $(docker ps -a --filter name=^mongo$ --format '{{.Status}}') | log: $(docker logs mongo 2>&1 | tail -n 8 | tr '\n' ' ' | cut -c1-1500)"
             exit 1
           }
-          docker run -d --name mongo -p 27017:27017 mongo:8.0.32 --replSet rs0 --bind_ip_all || fail "docker run failed"
+          docker run -d --name mongo -p 27017:27017 mongo:8.0.34 --replSet rs0 --bind_ip_all || fail "docker run failed"
           out=""
           for i in $(seq 1 120); do
             out=$(docker exec mongo mongosh --quiet --eval 'db.runCommand({ping: 1}).ok' 2>&1) && [ "$out" = "1" ] && break
