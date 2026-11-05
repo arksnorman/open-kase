@@ -1,0 +1,9 @@
+{{define "layout"}}{{template "content" .}}
+--
+This message was sent automatically by {{.ProductName}}.
+Replies to this email are not processed or read.
+{{end}}
+{{define "requesterlink"}}{{if .URL}}Open the ticket: {{.URL}}
+{{else}}To view or answer this ticket, open the system you used to submit it and
+look for reference {{.Ref}}. Please do not reply to this email.
+{{end}}{{end}}

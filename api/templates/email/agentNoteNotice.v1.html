@@ -1,0 +1,4 @@
+{{define "content"}}{{template "ticketline" .}}
+<p style="margin:0 0 8px;">{{if .AuthorName}}<strong>{{.AuthorName}}</strong> added an internal note{{else}}An internal note was added{{end}} to <strong>{{.Ticket.Subject}}</strong>.</p>
+<p style="margin:0;color:#57534e;">Internal notes are visible to the support team only. The note is not included in this email; open the ticket to read it.</p>
+{{template "button" .Ticket.URL}}{{end}}

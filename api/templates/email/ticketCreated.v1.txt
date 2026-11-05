@@ -1,0 +1,11 @@
+{{define "content"}}{{if .RecipientName}}Hello {{.RecipientName}},
+
+{{end}}A new ticket is waiting unassigned in the {{.GroupName}} queue.
+
+{{.Ticket.Ref}}: {{.Ticket.Subject}}
+{{if .RequesterName}}Requester: {{.RequesterName}}
+{{end}}Priority:  {{.PriorityLabel}}
+Group:     {{.GroupName}}
+
+Open the ticket: {{.Ticket.URL}}
+{{end}}

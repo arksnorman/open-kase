@@ -1,0 +1,5 @@
+{{define "content"}}{{template "ticketline" .}}
+<h1 style="margin:0 0 16px;font-size:20px;line-height:1.3;">{{.TransitionTitle}}</h1>
+<p style="margin:0 0 8px;"><strong>{{.Ticket.Subject}}</strong>{{if eq .Transition "resolved"}} was marked as resolved.{{else if eq .Transition "reopened"}} was reopened and is being handled again.{{else}} was archived. Archived tickets are closed permanently; a new request is needed for further help.{{end}}</p>
+{{if .StatusName}}<p style="margin:0;font-size:13px;color:#57534e;">Current status: {{.StatusName}}</p>{{end}}
+{{template "requesterlink" .Ticket}}{{end}}

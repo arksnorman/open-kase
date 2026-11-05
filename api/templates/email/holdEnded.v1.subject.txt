@@ -1,0 +1,1 @@
+[{{.Ticket.Ref}}] Back from hold: {{.Reason}}

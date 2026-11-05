@@ -1,0 +1,6 @@
+{{define "content"}}{{.Ticket.Ref}}: {{.Ticket.Subject}}
+
+The hold on this ticket ended ({{.Reason}}). It is Open again and assigned to you.
+
+Open the ticket: {{.Ticket.URL}}
+{{end}}

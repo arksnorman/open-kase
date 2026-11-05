@@ -1,0 +1,8 @@
+{{define "content"}}{{.TransitionTitle}}
+
+{{.Ticket.Ref}}: {{.Ticket.Subject}}
+{{if eq .Transition "resolved"}}The ticket was marked as resolved.{{else if eq .Transition "reopened"}}The ticket was reopened and is being handled again.{{else}}The ticket was archived. Archived tickets are closed permanently; a new request
+is needed for further help.{{end}}
+{{if .StatusName}}Current status: {{.StatusName}}
+{{end}}
+{{template "requesterlink" .Ticket}}{{end}}

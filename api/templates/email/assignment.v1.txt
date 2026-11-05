@@ -1,0 +1,7 @@
+{{define "content"}}{{.Ticket.Ref}}: {{.Ticket.Subject}}
+
+{{if .AssigneeName}}This ticket is now assigned to {{.AssigneeName}} in the {{.GroupName}} group.{{else}}This ticket was moved to the {{.GroupName}} queue and is waiting unassigned.{{end}}
+{{if .ChangedByName}}Changed by {{.ChangedByName}}.
+{{end}}
+Open the ticket: {{.Ticket.URL}}
+{{end}}

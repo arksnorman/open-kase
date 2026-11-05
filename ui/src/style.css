@@ -1,0 +1,1172 @@
+@import 'tailwindcss';
+@import '@fontsource/ibm-plex-sans/400.css';
+@import '@fontsource/ibm-plex-sans/500.css';
+@import '@fontsource/ibm-plex-sans/600.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
+
+/*
+ * Ledger design tokens. Every color lives here as a CSS variable; components reference
+ * tokens only (via Tailwind utilities such as bg-surface/text-muted or the lg-* classes
+ * below). Values from the Ledger direction (architecture §11.1 ink palette).
+ * Contrast measured 2026-10-02: every text pair ≥ 4.5:1 and
+ * border-strong/ring ≥ 3:1 against bg, surface and subtle in both themes. Re-measure
+ * after changing any value. --kase-line/--kase-border are decorative dividers only; control
+ * boundaries use --kase-border-strong.
+ */
+:root,
+:root[data-theme='light'] {
+  --kase-bg: #fafaf9;
+  --kase-surface: #ffffff;
+  --kase-subtle: #f4f4f5;
+  --kase-sel: #f1f1f2;
+  --kase-line: #ececee;
+  --kase-text: #18181b;
+  --kase-muted: #52525b;
+  --kase-border: #e4e4e7;
+  --kase-border-strong: #8a8a93;
+  --kase-primary: #18181b;
+  --kase-primary-fg: #fafafa;
+  --kase-warn: #92400e;
+  --kase-warn-bg: #fef3c7;
+  --kase-danger: #b91c1c;
+  --kase-danger-bg: #fee2e2;
+  --kase-p1: #b91c1c; --kase-p1-bg: #fee2e2;
+  --kase-p2: #c2410c; --kase-p2-bg: #ffedd5;
+  --kase-p3: #1d4ed8; --kase-p3-bg: #dbeafe;
+  --kase-p4: #475569; --kase-p4-bg: #f1f5f9;
+  --kase-st-open: #92400e; --kase-st-open-bg: #fef3c7;
+  /* Awaiting customer: sky blue, matching the requester tokens; On hold: slate. */
+  --kase-st-waiting: #075985; --kase-st-waiting-bg: #e0f2fe;
+  --kase-st-hold: #334155; --kase-st-hold-bg: #e2e8f0;
+  --kase-st-resolved: #15803d; --kase-st-resolved-bg: #dcfce7;
+  --kase-st-archived: #52525b; --kase-st-archived-bg: #f4f4f5;
+  --kase-ring: #71717a;
+  /* Main action accent (indigo): primary buttons and the selected composer audience. */
+  --kase-accent: #4f46e5;
+  --kase-accent-hover: #4338ca;
+  --kase-accent-fg: #ffffff;
+  --kase-accent-soft: #eef2ff;
+  --kase-accent-text: #3730a3;
+  /* Audience: public (green) and agent note (warm amber). */
+  --kase-public: #047857; --kase-public-bg: #ecfdf5; --kase-public-line: #a7f3d0;
+  --kase-note: #92400e; --kase-note-bg: #fffbeb; --kase-note-line: #fcd34d;
+  /* Author avatars and requester messages: staff (indigo), requester (sky; owner decision 2026-10-31). */
+  --kase-staff: #3730a3; --kase-staff-bg: #e0e7ff;
+  --kase-req: #075985; --kase-req-bg: #e0f2fe; --kase-req-msg: #f0f9ff; --kase-req-line: #bae6fd;
+  /* Entity icon tiles (EntityIcon, bot/webhook avatars): soft tint + matching icon colour, icon contrast >= 3:1.
+     Avoids indigo (primary action), amber (agent notes), sky (requester), green/red (success/danger). */
+  --kase-tag: #0f766e; --kase-tag-bg: #ccfbf1;
+  --kase-group: #6d28d9; --kase-group-bg: #ede9fe;
+  --kase-reply: #1d4ed8; --kase-reply-bg: #dbeafe;
+  --kase-hook: #c2410c; --kase-hook-bg: #ffedd5;
+  --kase-bot: #0e7490; --kase-bot-bg: #cffafe;
+  --kase-hold: #334155; --kase-hold-bg: #e2e8f0;
+  --kase-org: #047857; --kase-org-bg: #d1fae5;
+  --kase-ok: #15803d;
+  --kase-shadow-pop: 0 8px 24px rgb(24 24 27 / 0.12), 0 1px 3px rgb(24 24 27 / 0.08);
+  --kase-hover: rgb(127 127 127 / 0.08);
+  --kase-backdrop: rgb(24 24 27 / 0.4);
+  /* Theme-invariant: QR codes stay dark-on-light so phone cameras read them in dark mode. */
+  --kase-qr-dark: #000000;
+  --kase-qr-light: #ffffff;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  /* No-JS fallback before the inline script sets data-theme. */
+  :root:not([data-theme]) {
+    --kase-bg: #111113;
+    --kase-surface: #1b1b1f;
+    --kase-subtle: #232328;
+    --kase-sel: #26262c;
+    --kase-line: #2c2c32;
+    --kase-text: #fafafa;
+    --kase-muted: #a1a1aa;
+    --kase-border: #3f3f46;
+    --kase-border-strong: #71717a;
+    --kase-primary: #f4f4f5;
+    --kase-primary-fg: #18181b;
+    --kase-warn: #fbbf24;
+    --kase-warn-bg: #33270c;
+    --kase-danger: #f87171;
+    --kase-danger-bg: #3a1515;
+    --kase-p1: #f87171; --kase-p1-bg: #3a1515;
+    --kase-p2: #fb923c; --kase-p2-bg: #3b1d0a;
+    --kase-p3: #60a5fa; --kase-p3-bg: #172554;
+    --kase-p4: #94a3b8; --kase-p4-bg: #1e293b;
+    --kase-st-open: #fbbf24; --kase-st-open-bg: #33270c;
+    --kase-st-waiting: #bae6fd; --kase-st-waiting-bg: #0c4a6e;
+    --kase-st-hold: #cbd5e1; --kase-st-hold-bg: #1e293b;
+    --kase-st-resolved: #4ade80; --kase-st-resolved-bg: #052e16;
+    --kase-st-archived: #a1a1aa; --kase-st-archived-bg: #27272a;
+    --kase-ring: #a1a1aa;
+    --kase-accent: #4f46e5;
+    --kase-accent-hover: #5850ec;
+    --kase-accent-fg: #ffffff;
+    --kase-accent-soft: #1e1b4b;
+    --kase-accent-text: #c7d2fe;
+    --kase-public: #6ee7b7; --kase-public-bg: #022c22; --kase-public-line: #065f46;
+    --kase-note: #fcd34d; --kase-note-bg: #2a2110; --kase-note-line: #a16207;
+    --kase-staff: #c7d2fe; --kase-staff-bg: #312e81;
+    --kase-req: #bae6fd; --kase-req-bg: #0c4a6e; --kase-req-msg: #0c1f2e; --kase-req-line: #075985;
+    --kase-tag: #5eead4; --kase-tag-bg: #134e4a;
+    --kase-group: #c4b5fd; --kase-group-bg: #4c1d95;
+    --kase-reply: #bfdbfe; --kase-reply-bg: #1e3a8a;
+    --kase-hook: #fdba74; --kase-hook-bg: #7c2d12;
+    --kase-bot: #67e8f9; --kase-bot-bg: #164e63;
+    --kase-hold: #cbd5e1; --kase-hold-bg: #1e293b;
+    --kase-org: #6ee7b7; --kase-org-bg: #064e3b;
+    --kase-ok: #4ade80;
+    --kase-shadow-pop: 0 8px 24px rgb(0 0 0 / 0.5), 0 1px 3px rgb(0 0 0 / 0.4);
+    --kase-backdrop: rgb(0 0 0 / 0.6);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --kase-bg: #111113;
+  --kase-surface: #1b1b1f;
+  --kase-subtle: #232328;
+  --kase-sel: #26262c;
+  --kase-line: #2c2c32;
+  --kase-text: #fafafa;
+  --kase-muted: #a1a1aa;
+  --kase-border: #3f3f46;
+  --kase-border-strong: #71717a;
+  --kase-primary: #f4f4f5;
+  --kase-primary-fg: #18181b;
+  --kase-warn: #fbbf24;
+  --kase-warn-bg: #33270c;
+  --kase-danger: #f87171;
+  --kase-danger-bg: #3a1515;
+  --kase-p1: #f87171; --kase-p1-bg: #3a1515;
+  --kase-p2: #fb923c; --kase-p2-bg: #3b1d0a;
+  --kase-p3: #60a5fa; --kase-p3-bg: #172554;
+  --kase-p4: #94a3b8; --kase-p4-bg: #1e293b;
+  --kase-st-open: #fbbf24; --kase-st-open-bg: #33270c;
+  --kase-st-waiting: #bae6fd; --kase-st-waiting-bg: #0c4a6e;
+  --kase-st-hold: #cbd5e1; --kase-st-hold-bg: #1e293b;
+  --kase-st-resolved: #4ade80; --kase-st-resolved-bg: #052e16;
+  --kase-st-archived: #a1a1aa; --kase-st-archived-bg: #27272a;
+  --kase-ring: #a1a1aa;
+  --kase-accent: #4f46e5;
+  --kase-accent-hover: #5850ec;
+  --kase-accent-fg: #ffffff;
+  --kase-accent-soft: #1e1b4b;
+  --kase-accent-text: #c7d2fe;
+  --kase-public: #6ee7b7; --kase-public-bg: #022c22; --kase-public-line: #065f46;
+  --kase-note: #fcd34d; --kase-note-bg: #2a2110; --kase-note-line: #a16207;
+  --kase-staff: #c7d2fe; --kase-staff-bg: #312e81;
+  --kase-req: #bae6fd; --kase-req-bg: #0c4a6e; --kase-req-msg: #0c1f2e; --kase-req-line: #075985;
+  --kase-tag: #5eead4; --kase-tag-bg: #134e4a;
+  --kase-group: #c4b5fd; --kase-group-bg: #4c1d95;
+  --kase-reply: #bfdbfe; --kase-reply-bg: #1e3a8a;
+  --kase-hook: #fdba74; --kase-hook-bg: #7c2d12;
+  --kase-bot: #67e8f9; --kase-bot-bg: #164e63;
+  --kase-hold: #cbd5e1; --kase-hold-bg: #1e293b;
+  --kase-org: #6ee7b7; --kase-org-bg: #064e3b;
+  --kase-ok: #4ade80;
+  --kase-shadow-pop: 0 8px 24px rgb(0 0 0 / 0.5), 0 1px 3px rgb(0 0 0 / 0.4);
+  --kase-backdrop: rgb(0 0 0 / 0.6);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--kase-bg);
+  --color-surface: var(--kase-surface);
+  --color-subtle: var(--kase-subtle);
+  --color-sel: var(--kase-sel);
+  --color-line: var(--kase-line);
+  --color-text: var(--kase-text);
+  --color-muted: var(--kase-muted);
+  --color-border: var(--kase-border);
+  --color-border-strong: var(--kase-border-strong);
+  --color-primary: var(--kase-primary);
+  --color-primary-fg: var(--kase-primary-fg);
+  --color-warn: var(--kase-warn);
+  --color-warn-bg: var(--kase-warn-bg);
+  --color-danger: var(--kase-danger);
+  --color-danger-bg: var(--kase-danger-bg);
+  --color-ring: var(--kase-ring);
+  --color-accent: var(--kase-accent);
+  --color-accent-fg: var(--kase-accent-fg);
+  --color-accent-soft: var(--kase-accent-soft);
+  --color-accent-text: var(--kase-accent-text);
+  --color-public: var(--kase-public);
+  --color-public-bg: var(--kase-public-bg);
+  --color-note: var(--kase-note);
+  --color-note-bg: var(--kase-note-bg);
+  --color-note-line: var(--kase-note-line);
+  --color-ok: var(--kase-ok);
+  --color-backdrop: var(--kase-backdrop);
+  --color-qr-dark: var(--kase-qr-dark);
+  --color-qr-light: var(--kase-qr-light);
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+@layer base {
+  html,
+  body {
+    background-color: var(--kase-bg);
+    color: var(--kase-text);
+  }
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+  }
+  a {
+    color: inherit;
+  }
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  :focus-visible {
+    outline: 2px solid var(--kase-ring);
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Ledger primitives. Presentation only; swap this layer to restyle. */
+@layer components {
+  .lg-hov:hover:not(:disabled) {
+    box-shadow: inset 0 0 0 999px var(--kase-hover);
+  }
+  .lg-ell {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+  .lg-mono {
+    font-family: var(--font-mono);
+  }
+  .lg-link {
+    text-decoration: none;
+  }
+  .lg-link:hover {
+    text-decoration: underline;
+  }
+
+  /* Inline edit (InlineEditField): view-first value with a dotted underline and a pencil. */
+  .lg-inline-value {
+    cursor: pointer;
+    text-decoration: underline dotted var(--kase-border-strong);
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
+  }
+  .lg-inline-value:hover {
+    text-decoration-color: var(--kase-text);
+  }
+  /* Label/value lists in the ticket Details panel: one grid for every section so labels and values
+     line up down the whole panel. Multi-line values put `self-start` on their label. */
+  .lg-props {
+    margin: 0;
+    display: grid;
+    grid-template-columns: 104px minmax(0, 1fr);
+    column-gap: 0.75rem;
+    row-gap: 0.625rem;
+    align-items: center;
+  }
+  /* Read-only value with more on hover (e.g. the SLA chip): same dotted underline, no pencil. */
+  .lg-hover-hint {
+    cursor: help;
+    text-decoration: underline dotted currentColor;
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
+  }
+  .lg-inline-pencil {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--kase-muted);
+    opacity: 0.55;
+  }
+  .lg-inline-pencil:hover:not(:disabled),
+  .lg-inline-pencil:focus-visible,
+  .lg-inline-value:hover + .lg-inline-pencil {
+    opacity: 1;
+    color: var(--kase-text);
+    box-shadow: inset 0 0 0 999px var(--kase-hover);
+  }
+  .lg-inline-pencil:disabled {
+    opacity: 0.3;
+  }
+
+  /* Buttons */
+  .lg-btn,
+  .lg-btn-strong,
+  .lg-btn-primary {
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    border: 1px solid var(--kase-border);
+    background: var(--kase-surface);
+    color: var(--kase-text);
+  }
+  .lg-btn-strong {
+    font-weight: 600;
+    border-color: var(--kase-text);
+  }
+  /* The main action of a view: indigo accent (owner decision 2026-10-31). */
+  .lg-btn-primary {
+    font-weight: 600;
+    border-color: var(--kase-accent);
+    background: var(--kase-accent);
+    color: var(--kase-accent-fg);
+  }
+  .lg-btn-primary:hover:not(:disabled) {
+    border-color: var(--kase-accent-hover);
+    background: var(--kase-accent-hover);
+  }
+  .lg-btn:disabled,
+  .lg-btn-strong:disabled,
+  .lg-btn-primary:disabled,
+  .lg-btn-sm:disabled {
+    opacity: 0.5;
+  }
+  .lg-btn-sm {
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    flex: none;
+    border: 1px solid var(--kase-border);
+    background: var(--kase-surface);
+    color: var(--kase-text);
+  }
+  .lg-icon-btn,
+  .lg-icon-btn-b {
+    width: 32px;
+    height: 32px;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    border: 0;
+    background: transparent;
+    color: var(--kase-muted);
+  }
+  .lg-icon-btn-b {
+    border: 1px solid var(--kase-border);
+    background: var(--kase-surface);
+    color: var(--kase-text);
+  }
+  .lg-chip {
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 10px;
+    border-radius: 6px;
+    font-size: 12.5px;
+    border: 1px solid var(--kase-border);
+    background: var(--kase-surface);
+    color: var(--kase-text);
+  }
+
+  /* Form controls */
+  .lg-input {
+    width: 100%;
+    height: 36px;
+    padding: 0 12px;
+    border-radius: 6px;
+    border: 1px solid var(--kase-border-strong);
+    background: var(--kase-surface);
+    color: var(--kase-text);
+    font: inherit;
+  }
+  .lg-input[aria-invalid='true'] {
+    border-color: var(--kase-danger);
+  }
+  textarea.lg-input {
+    height: auto;
+    padding: 10px 12px;
+    line-height: 1.5;
+    resize: vertical;
+  }
+  .lg-label {
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .lg-field-error {
+    font-size: 12px;
+    color: var(--kase-danger);
+  }
+
+  /* Navigation */
+  .lg-nav {
+    height: 32px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 8px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--kase-text);
+    text-decoration: none;
+  }
+  .lg-nav[aria-current='page'] {
+    background: var(--kase-subtle);
+    font-weight: 600;
+    box-shadow: inset 0 0 0 1px var(--kase-border);
+  }
+  /* Icon rail (collapsed sidebar, ShellFrame): links keep their icon; labels and counts stay
+     available to assistive technology but are visually hidden. Links carry a `title`. */
+  .lg-rail .lg-nav {
+    width: 40px;
+    height: 36px;
+    padding: 0;
+    justify-content: center;
+  }
+  .lg-rail .lg-nav > :not(svg) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+  .lg-rail .lg-section-label {
+    display: none;
+  }
+  .lg-section-label {
+    padding: 4px 8px 6px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--kase-muted);
+  }
+  .lg-count {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--kase-muted);
+  }
+  .lg-count-warn {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 0 6px;
+    border-radius: 4px;
+    color: var(--kase-warn);
+    background: var(--kase-warn-bg);
+  }
+
+  /* Avatars (initials) */
+  .lg-avatar,
+  .lg-avatar-sm,
+  .lg-avatar-xs {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    background: var(--kase-subtle);
+    border: 1px solid var(--kase-border);
+  }
+  .lg-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    font-size: 11px;
+  }
+  .lg-avatar-sm {
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    font-size: 10px;
+  }
+  .lg-avatar-xs {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    font-size: 9.5px;
+  }
+
+  /* Author avatars by role (BaseAvatar `role`): a Tabler icon in a tinted circle. */
+  .lg-avatar-role {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+  }
+  .lg-avatar-staff {
+    color: var(--kase-staff);
+    background: var(--kase-staff-bg);
+  }
+  .lg-avatar-requester {
+    color: var(--kase-req);
+    background: var(--kase-req-bg);
+  }
+  .lg-avatar-bot {
+    color: var(--kase-bot);
+    background: var(--kase-bot-bg);
+  }
+  .lg-avatar-webhook {
+    color: var(--kase-hook);
+    background: var(--kase-hook-bg);
+  }
+  .lg-avatar-neutral {
+    color: var(--kase-text);
+    background: var(--kase-subtle);
+    border: 1px solid var(--kase-border);
+  }
+  /* EntityIcon tiles by kind. */
+  .lg-entity-tag { color: var(--kase-tag); background: var(--kase-tag-bg); }
+  .lg-entity-group { color: var(--kase-group); background: var(--kase-group-bg); }
+  .lg-entity-reply { color: var(--kase-reply); background: var(--kase-reply-bg); }
+  .lg-entity-webhook { color: var(--kase-hook); background: var(--kase-hook-bg); }
+  .lg-entity-bot { color: var(--kase-bot); background: var(--kase-bot-bg); }
+  .lg-entity-holdReason { color: var(--kase-hold); background: var(--kase-hold-bg); }
+  .lg-entity-organisation { color: var(--kase-org); background: var(--kase-org-bg); }
+  /* Administrator shield on a user avatar. */
+  .lg-avatar-badge {
+    position: absolute;
+    right: -3px;
+    bottom: -3px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    color: var(--kase-staff);
+    background: var(--kase-surface);
+  }
+
+  /* Relative times: body font with aligned digits ("29d ago"). */
+  .lg-time {
+    font-family: var(--font-sans);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Pop-up notifications and notices (ToastHost, BaseAlert success/info): a lifted surface card. */
+  .lg-pop-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--kase-text);
+    background: var(--kase-surface);
+    border: 1px solid var(--kase-border);
+    box-shadow: var(--kase-shadow-pop);
+  }
+
+  /* Badges: priority, status, SLA, audience */
+  .lg-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 22px;
+    padding: 0 7px;
+    border-radius: 6px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .lg-prio-1,
+  .lg-prio-2,
+  .lg-prio-3,
+  .lg-prio-4 {
+    font-weight: 600;
+  }
+  .lg-prio-1 {
+    color: var(--kase-p1);
+    background: var(--kase-p1-bg);
+    border: 1px solid var(--kase-p1);
+  }
+  .lg-prio-2 {
+    color: var(--kase-p2);
+    background: var(--kase-p2-bg);
+    border: 1px solid var(--kase-p2);
+  }
+  .lg-prio-3 {
+    color: var(--kase-p3);
+    background: var(--kase-p3-bg);
+    border: 1px solid transparent;
+  }
+  .lg-prio-4 {
+    font-weight: 500;
+    color: var(--kase-p4);
+    background: var(--kase-p4-bg);
+    border: 1px dashed var(--kase-p4);
+  }
+  .lg-status {
+    padding: 0 8px;
+    border: 1px solid transparent;
+    font-weight: 500;
+    max-width: min(100%, 16rem);
+    min-width: 0;
+  }
+  .lg-status-open {
+    color: var(--kase-st-open);
+    background: var(--kase-st-open-bg);
+  }
+  .lg-status-hold {
+    color: var(--kase-st-hold);
+    background: var(--kase-st-hold-bg);
+  }
+  .lg-status-waiting {
+    color: var(--kase-st-waiting);
+    background: var(--kase-st-waiting-bg);
+  }
+  .lg-status-resolved {
+    color: var(--kase-st-resolved);
+    background: var(--kase-st-resolved-bg);
+  }
+  .lg-status-archived {
+    color: var(--kase-st-archived);
+    background: var(--kase-st-archived-bg);
+  }
+  .lg-dot {
+    width: 8px;
+    height: 8px;
+    flex: none;
+    border-radius: 50%;
+  }
+  /* Dot shapes stay distinct so status never relies on colour alone. */
+  .lg-dot-open {
+    border: 1.5px solid var(--kase-st-open);
+  }
+  .lg-dot-hold {
+    border: 1.5px solid var(--kase-st-hold);
+    background: linear-gradient(90deg, var(--kase-st-hold) 50%, transparent 50%);
+  }
+  .lg-dot-waiting {
+    border: 1.5px dashed var(--kase-st-waiting);
+  }
+  .lg-dot-resolved {
+    background: var(--kase-st-resolved);
+  }
+  .lg-dot-archived {
+    border-radius: 2px;
+    background: var(--kase-st-archived);
+  }
+  .lg-sla {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 22px;
+    padding: 0 7px;
+    border-radius: 6px;
+    font-size: 12px;
+    white-space: nowrap;
+    border: 1px solid transparent;
+    background: transparent;
+    color: inherit;
+    font-family: inherit;
+  }
+  .lg-sla-plain {
+    color: var(--kase-text);
+    border: 1px solid var(--kase-border);
+  }
+  .lg-sla-quiet {
+    padding: 0;
+    color: var(--kase-muted);
+  }
+  .lg-sla-danger {
+    font-weight: 600;
+    color: var(--kase-danger);
+    background: var(--kase-danger-bg);
+    border-color: var(--kase-danger);
+  }
+  /* Met: green like the success/public badge. */
+  .lg-sla-success {
+    font-weight: 600;
+    color: var(--kase-public);
+    background: var(--kase-public-bg);
+    border-color: var(--kase-public-line);
+  }
+  .lg-sla-warn {
+    font-weight: 600;
+    color: var(--kase-warn);
+    background: var(--kase-warn-bg);
+    border-color: var(--kase-warn);
+  }
+  .lg-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 4px;
+    font-size: 11.5px;
+    font-weight: 500;
+    white-space: nowrap;
+    color: var(--kase-muted);
+    border: 1px solid var(--kase-border);
+  }
+  /* Agent-only content: warm amber (owner decision 2026-10-31). */
+  .lg-tag-note {
+    font-weight: 600;
+    color: var(--kase-note);
+    border: 1px solid var(--kase-note-line);
+    background: var(--kase-note-bg);
+  }
+  .lg-tag-public {
+    font-weight: 600;
+    color: var(--kase-public);
+    border: 1px solid var(--kase-public-line);
+    background: var(--kase-public-bg);
+  }
+  /* Positive state (active, on, sent, configured): green like the Public badge. */
+  .lg-tag-success {
+    font-weight: 600;
+    color: var(--kase-public);
+    border: 1px solid var(--kase-public-line);
+    background: var(--kase-public-bg);
+  }
+  /* Emphasised neutral label (e.g. "2FA", "Configured"). */
+  .lg-tag-strong {
+    font-weight: 600;
+    color: var(--kase-text);
+    border: 1px solid var(--kase-border-strong);
+    background: var(--kase-surface);
+  }
+
+  /* Messages */
+  .lg-msg {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    border-radius: 6px;
+    line-height: 1.55;
+    font-size: 13.5px;
+    border: 1px solid var(--kase-border);
+    background: var(--kase-surface);
+  }
+  /* Requester messages: sky tint, so a thread shows who said what (agent notes stay amber). */
+  .lg-msg-requester {
+    border: 1px solid var(--kase-req-line);
+    background: var(--kase-req-msg);
+  }
+  .lg-tag-requester {
+    font-weight: 600;
+    color: var(--kase-req);
+    border: 1px solid var(--kase-req-line);
+    background: var(--kase-req-bg);
+  }
+  .lg-msg-note {
+    border: 1px solid var(--kase-note-line);
+    background: var(--kase-note-bg);
+  }
+  .lg-attach {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid var(--kase-border);
+    background: var(--kase-bg);
+  }
+
+  /* Segmented control (audience, theme) */
+  .lg-seg {
+    display: inline-flex;
+    padding: 2px;
+    gap: 2px;
+    border-radius: 6px;
+    border: 1px solid var(--kase-border);
+    background: var(--kase-bg);
+  }
+  .lg-seg-btn {
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 12px;
+    border-radius: 4px;
+    font-size: 13px;
+    border: 0;
+    background: transparent;
+    color: var(--kase-muted);
+  }
+  .lg-seg-btn[aria-checked='true'] {
+    font-weight: 600;
+    background: var(--kase-accent-soft);
+    color: var(--kase-accent-text);
+    box-shadow: inset 0 0 0 1px var(--kase-accent);
+  }
+  /* The composer's "Agent note" audience: amber like the notes themselves. */
+  .lg-seg-btn[data-tone='note'][aria-checked='true'] {
+    background: var(--kase-note-bg);
+    color: var(--kase-note);
+    box-shadow: inset 0 0 0 1px var(--kase-note-line);
+  }
+  /* Quieter variant for settings such as theme */
+  .lg-seg-quiet .lg-seg-btn[aria-checked='true'] {
+    background: var(--kase-subtle);
+    color: var(--kase-text);
+    box-shadow: inset 0 0 0 1px var(--kase-border);
+  }
+
+  /* Tabs */
+  .lg-tab {
+    height: 52px;
+    padding: 0 10px;
+    border: 0;
+    background: transparent;
+    font-size: 13px;
+    margin-bottom: -1px;
+    color: var(--kase-muted);
+    border-bottom: 2px solid transparent;
+  }
+  .lg-tab[aria-selected='true'] {
+    font-weight: 600;
+    color: var(--kase-text);
+    border-bottom-color: var(--kase-text);
+  }
+
+  /* Properties strip */
+  .lg-prop {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 12px;
+    border-right: 1px solid var(--kase-line);
+  }
+  .lg-prop:last-child {
+    border-right: 0;
+  }
+  .lg-prop dt {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--kase-muted);
+  }
+  .lg-prop dd {
+    margin: 0;
+    min-height: 22px;
+    display: flex;
+    align-items: center;
+  }
+
+  /* Search hit highlight (HighlightedText) */
+  .lg-mark {
+    background: var(--kase-subtle);
+    color: var(--kase-text);
+    font-weight: 600;
+    border-radius: 2px;
+    box-shadow: inset 0 -2px 0 var(--kase-border-strong);
+  }
+
+  /* Panels and callouts */
+  .lg-panel {
+    border-radius: 6px;
+    border: 1px solid var(--kase-border);
+    background: var(--kase-surface);
+  }
+  .lg-alert-danger,
+  .lg-alert-warn {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+  }
+  .lg-alert-danger {
+    color: var(--kase-danger);
+    background: var(--kase-danger-bg);
+    border: 1px solid var(--kase-danger);
+  }
+  .lg-alert-warn {
+    color: var(--kase-warn);
+    background: var(--kase-warn-bg);
+    border: 1px solid var(--kase-warn);
+  }
+  .lg-h3 {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--kase-muted);
+  }
+
+  /* Floating panels (floating.ts): fixed-position, top-layer popover when supported.
+     Resets the UA [popover] box (inset/margin/padding/colours). */
+  .lg-float {
+    position: fixed;
+    inset: auto;
+    margin: 0;
+    padding: 0;
+    z-index: 40;
+    overflow: auto;
+    color: var(--kase-text);
+    border-radius: 6px;
+    border: 1px solid var(--kase-border);
+    background: var(--kase-surface);
+    box-shadow: 0 10px 24px -6px rgb(0 0 0 / 0.18), 0 2px 6px -2px rgb(0 0 0 / 0.1);
+  }
+  /* Listbox option rows (SelectInput). */
+  .lg-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 32px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 13px;
+    cursor: pointer;
+    color: var(--kase-text);
+  }
+  .lg-option[data-active='true'] {
+    background: var(--kase-subtle);
+    box-shadow: inset 0 0 0 1px var(--kase-border);
+  }
+  .lg-option[aria-selected='true'] {
+    font-weight: 600;
+  }
+  .lg-option[aria-disabled='true'] {
+    cursor: not-allowed;
+    color: var(--kase-muted);
+    opacity: 0.6;
+  }
+
+  /* Admin/data tables */
+  .lg-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .lg-table th {
+    height: 34px;
+    padding: 0 12px;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--kase-muted);
+    background: var(--kase-subtle);
+    border-bottom: 1px solid var(--kase-border);
+  }
+  .lg-table td {
+    height: 36px;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--kase-line);
+  }
+  .lg-table tr:last-child td {
+    border-bottom: 0;
+  }
+}
+
+/* Rendered Markdown (message bodies) and the WYSIWYG editor share these rules. */
+@layer components {
+  .lg-prose {
+    overflow-wrap: anywhere;
+  }
+  .lg-prose > :first-child {
+    margin-top: 0;
+  }
+  .lg-prose > :last-child {
+    margin-bottom: 0;
+  }
+  .lg-prose p,
+  .lg-prose ul,
+  .lg-prose ol,
+  .lg-prose blockquote,
+  .lg-prose pre {
+    margin: 0 0 0.6em;
+  }
+  .lg-prose ul {
+    list-style: disc;
+    padding-left: 1.4em;
+  }
+  .lg-prose ol {
+    list-style: decimal;
+    padding-left: 1.6em;
+  }
+  .lg-prose li > p {
+    margin: 0;
+  }
+  .lg-prose a {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .lg-prose code {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 1px 4px;
+    border-radius: 4px;
+    background: var(--kase-subtle);
+    border: 1px solid var(--kase-line);
+  }
+  .lg-prose pre {
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: var(--kase-subtle);
+    border: 1px solid var(--kase-border);
+    overflow-x: auto;
+  }
+  .lg-prose pre code {
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  .lg-prose blockquote {
+    padding-left: 10px;
+    border-left: 2px solid var(--kase-border-strong);
+    color: var(--kase-muted);
+  }
+  .lg-prose img {
+    max-width: 100%;
+  }
+}
+
+/* Drawer (BaseDrawer): off-canvas panel on a native modal <dialog>, full height at the left
+   (shell navigation below desktop width) or right edge (ticket side panel on narrow workspaces). */
+@layer components {
+  .lg-drawer {
+    position: fixed;
+    inset: 0 auto 0 0;
+    margin: 0;
+    padding: 0;
+    width: min(280px, calc(100vw - 56px));
+    max-width: none;
+    height: 100dvh;
+    max-height: none;
+    overflow: hidden;
+    border: 0;
+    border-right: 1px solid var(--kase-border);
+    background: var(--kase-surface);
+    color: var(--kase-text);
+    box-shadow: 0 10px 24px -6px rgb(0 0 0 / 0.18);
+  }
+  .lg-drawer[data-side='right'] {
+    inset: 0 0 0 auto;
+    width: min(400px, 100vw);
+    border-right: 0;
+    border-left: 1px solid var(--kase-border);
+  }
+  .lg-drawer::backdrop {
+    background: var(--kase-backdrop);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .lg-drawer[open] {
+      animation: lg-drawer-in-left 160ms ease-out;
+    }
+    .lg-drawer[data-side='right'][open] {
+      animation-name: lg-drawer-in-right;
+    }
+  }
+}
+@keyframes lg-drawer-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+}
+@keyframes lg-drawer-in-right {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+/* Focus view (focusView.ts): an element shown near full viewport without being re-rendered. */
+@layer components {
+  .lg-focus-view,
+  .lg-focus-view[popover] {
+    position: fixed;
+    inset: 24px;
+    z-index: 60;
+    margin: 0;
+    width: auto;
+    height: auto;
+    max-width: none;
+    max-height: none;
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+    color: var(--kase-text);
+    background: var(--kase-surface);
+    border: 1px solid var(--kase-border);
+    border-radius: 8px;
+    box-shadow:
+      0 0 0 100vmax rgb(0 0 0 / 0.45),
+      0 10px 24px -6px rgb(0 0 0 / 0.18);
+  }
+  .lg-focus-view[popover]::backdrop {
+    background: transparent;
+  }
+  @media (max-width: 640px) {
+    .lg-focus-view,
+    .lg-focus-view[popover] {
+      inset: 8px;
+    }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .lg-focus-view {
+      animation: lg-focus-in 140ms ease-out;
+    }
+  }
+}
+@keyframes lg-focus-in {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+
+/* Tooltip card (directive in components/base/tooltip.ts): inverse of the page, both themes. */
+.kase-tooltip {
+  position: fixed;
+  inset: auto;
+  left: 0;
+  top: 0;
+  margin: 0;
+  border: 0;
+  width: max-content;
+  max-width: min(280px, calc(100vw - 16px));
+  padding: 6px 9px;
+  border-radius: 6px;
+  background: var(--kase-text);
+  color: var(--kase-bg);
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 500;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.22);
+}

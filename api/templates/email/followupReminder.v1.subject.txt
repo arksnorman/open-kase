@@ -1,0 +1,1 @@
+[{{.Ticket.Ref}}] Reminder: we are waiting for your reply: {{.Ticket.Subject}}

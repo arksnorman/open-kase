@@ -1,0 +1,5 @@
+{{define "content"}}{{template "ticketline" .}}
+<h1 style="margin:0 0 16px;font-size:20px;line-height:1.3;">We received your request</h1>
+<p style="margin:0 0 8px;">{{if .RecipientName}}Hello {{.RecipientName}}, w{{else}}W{{end}}e created ticket <strong>{{.Ticket.Ref}}</strong> for <strong>{{.Ticket.Subject}}</strong>.</p>
+<p style="margin:0 0 8px;">Our support team will review it and reply. Please keep the reference {{.Ticket.Ref}} for any follow-up.</p>
+{{template "requesterlink" .Ticket}}{{end}}

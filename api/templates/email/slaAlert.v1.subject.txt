@@ -1,0 +1,1 @@
+[{{.Ticket.Ref}}] {{if .Breached}}SLA missed{{else}}SLA due soon{{end}} ({{.TargetLabel}}): {{.Ticket.Subject}}

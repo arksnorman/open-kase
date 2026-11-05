@@ -1,0 +1,10 @@
+{{define "content"}}{{if .RecipientName}}Hello {{.RecipientName}},
+
+{{end}}We received your request and created ticket {{.Ticket.Ref}}.
+
+{{.Ticket.Ref}}: {{.Ticket.Subject}}
+
+Our support team will review it and reply. Please keep the reference
+{{.Ticket.Ref}} for any follow-up.
+
+{{template "requesterlink" .Ticket}}{{end}}

@@ -1,0 +1,13 @@
+**/node_modules
+ui/dist
+api/bin
+.git
+.github
+.claude
+.codex
+docs
+*.md
+.env
+**/*.key
+**/*.pem
+**/*.test

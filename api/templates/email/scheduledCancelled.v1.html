@@ -1,0 +1,4 @@
+{{define "content"}}{{template "ticketline" .}}
+<p style="margin:0 0 8px;">{{if .RecipientName}}Hello {{.RecipientName}}, your{{else}}Your{{end}} scheduled {{.What}} on <strong>{{.Ticket.Subject}}</strong> was <strong>cancelled</strong> and will not be sent.</p>
+<p style="margin:0;">{{.Explanation}}</p>
+{{template "button" .Ticket.URL}}{{end}}

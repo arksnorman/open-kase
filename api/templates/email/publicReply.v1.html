@@ -1,0 +1,5 @@
+{{define "content"}}{{template "ticketline" .}}
+<p style="margin:0 0 16px;">{{if .RecipientName}}Hello {{.RecipientName}}, there{{else}}There{{end}} is a new reply{{if .AuthorName}} from <strong>{{.AuthorName}}</strong>{{end}} on <strong>{{.Ticket.Subject}}</strong>.</p>
+<div style="margin:0;padding:16px;border-left:3px solid #1c1917;background:#fafaf9;white-space:pre-wrap;word-wrap:break-word;">{{.Body}}</div>
+{{if .Truncated}}<p style="margin:8px 0 0;font-size:13px;color:#57534e;">This reply was shortened.{{if .Ticket.URL}} Open the ticket to read all of it.{{end}}</p>{{end}}
+{{if .Ticket.URL}}{{template "button" .Ticket.URL}}{{else}}<p style="margin:24px 0 0;font-size:13px;color:#57534e;">Please do not reply to this email. To add information to this request, use the service or form through which you submitted it and mention reference {{.Ticket.Ref}}.</p>{{end}}{{end}}

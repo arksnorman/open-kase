@@ -1,0 +1,12 @@
+{{define "content"}}You are invited to {{.ProductName}}
+
+{{if .RecipientName}}Hello {{.RecipientName}},
+
+{{end}}{{if .InvitedBy}}{{.InvitedBy}} created{{else}}An administrator created{{end}} a {{.ProductName}} account for you{{if .Email}} ({{.Email}}){{end}}.
+Open this link to choose your password and activate the account:
+
+{{.URL}}
+
+The link works once and expires at {{.ExpiresAt}}. If you did not expect
+this invitation, ignore this email.
+{{end}}

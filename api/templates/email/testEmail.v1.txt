@@ -1,0 +1,7 @@
+{{define "content"}}Email delivery works
+
+This test message confirms that {{.ProductName}} can send email with the
+current settings.
+
+{{if .RequestedBy}}Requested by {{.RequestedBy}} at {{else}}Sent at {{end}}{{.SentAt}}.
+{{end}}

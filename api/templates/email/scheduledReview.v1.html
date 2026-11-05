@@ -1,0 +1,5 @@
+{{define "content"}}{{template "ticketline" .}}
+<p style="margin:0 0 8px;">{{if .RecipientName}}Hello {{.RecipientName}}, your{{else}}Your{{end}} scheduled {{.What}} on <strong>{{.Ticket.Subject}}</strong> was <strong>not sent</strong>.</p>
+<p style="margin:0 0 8px;">{{.Explanation}}</p>
+<p style="margin:0;color:#57534e;">It is kept for you: open the ticket to review the conversation, then send it now, reschedule, edit or cancel it.</p>
+{{template "button" .Ticket.URL}}{{end}}

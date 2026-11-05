@@ -1,0 +1,12 @@
+{{define "content"}}{{if .RecipientName}}Hello {{.RecipientName}},
+
+{{end}}There is a new reply{{if .AuthorName}} from {{.AuthorName}}{{end}} on {{.Ticket.Ref}}: {{.Ticket.Subject}}
+
+{{.Body}}
+{{if .Truncated}}
+[This reply was shortened.{{if .Ticket.URL}} Open the ticket to read all of it.{{end}}]
+{{end}}
+{{if .Ticket.URL}}Open the ticket: {{.Ticket.URL}}
+{{else}}Please do not reply to this email. To add information to this request, use the
+service or form through which you submitted it and mention reference {{.Ticket.Ref}}.
+{{end}}{{end}}

@@ -1,0 +1,11 @@
+{{define "content"}}{{if .RecipientName}}Hello {{.RecipientName}},
+
+{{end}}Our support team asked for more information on ticket {{.Ticket.Ref}} and has
+not received a reply yet.
+
+{{.Ticket.Ref}}: {{.Ticket.Subject}}
+{{if .AutoResolveNotice}}
+If we do not hear from you, this request will be marked as resolved
+automatically. You can still ask for further help afterwards.
+{{end}}
+{{template "requesterlink" .Ticket}}{{end}}

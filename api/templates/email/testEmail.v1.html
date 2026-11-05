@@ -1,0 +1,3 @@
+{{define "content"}}<h1 style="margin:0 0 16px;font-size:20px;line-height:1.3;">Email delivery works</h1>
+<p style="margin:0 0 8px;">This test message confirms that {{.ProductName}} can send email with the current settings.</p>
+<p style="margin:0;font-size:13px;color:#57534e;">{{if .RequestedBy}}Requested by {{.RequestedBy}} at {{else}}Sent at {{end}}{{.SentAt}}.</p>{{end}}

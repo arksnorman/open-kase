@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>open-kase</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <script>
+      // Apply the stored appearance before first paint. Only the theme choice is kept in
+      // localStorage; tokens and user data never are. Keep in sync with src/theme/theme.ts.
+      (function () {
+        var choice = 'system'
+        try {
+          var stored = localStorage.getItem('oc.theme')
+          if (stored === 'light' || stored === 'dark' || stored === 'system') choice = stored
+        } catch (e) {}
+        var dark = choice === 'dark' ||
+          (choice === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
+        var root = document.documentElement
+        root.setAttribute('data-theme', dark ? 'dark' : 'light')
+        root.setAttribute('data-theme-choice', choice)
+        root.style.colorScheme = dark ? 'dark' : 'light'
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

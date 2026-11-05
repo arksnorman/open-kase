@@ -1,0 +1,1 @@
+Re: [{{.Ticket.Ref}}] {{.Ticket.Subject}}

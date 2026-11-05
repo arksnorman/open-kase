@@ -1,0 +1,121 @@
+# Continuous integration: API checks against a real single-node MongoDB replica set and Redis,
+# and UI type check + build. No frontend tests (owner rule).
+name: CI
+
+# Pull requests run it directly; pushes to main and v* tags run it through release.yml (workflow_call),
+# so an image is only pushed after these checks passed.
+on:
+  pull_request:
+    branches: [main]
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: API (Go)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: api
+    services:
+      redis:
+        image: redis:8.2.2-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      OPEN_KASE_TEST_MONGO_URI: mongodb://127.0.0.1:27017/?replicaSet=rs0
+      OPEN_KASE_TEST_REDIS_URI: redis://127.0.0.1:6379/0
+      GOVULNCHECK_VERSION: v1.8.0
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: api/go.mod
+          cache-dependency-path: api/go.sum
+
+      # Service containers cannot take a command, so MongoDB is started here with --replSet and
+      # initiated as a single-member replica set (transactions need a replica set).
+      - name: Start MongoDB replica set
+        run: |
+          docker run -d --name mongo -p 27017:27017 mongo:8.0.32 --replSet rs0 --bind_ip_all
+          for i in $(seq 1 60); do
+            docker exec mongo mongosh --quiet --eval 'db.runCommand({ping: 1}).ok' >/dev/null 2>&1 && break
+            sleep 1
+          done
+          docker exec mongo mongosh --quiet --eval \
+            "rs.initiate({_id: 'rs0', members: [{_id: 0, host: '127.0.0.1:27017'}]})"
+          for i in $(seq 1 60); do
+            [ "$(docker exec mongo mongosh --quiet --eval 'db.hello().isWritablePrimary')" = "true" ] && exit 0
+            sleep 1
+          done
+          echo "MongoDB did not become primary"; docker logs mongo; exit 1
+
+      - name: gofmt
+        run: |
+          out="$(gofmt -l .)"
+          if [ -n "$out" ]; then echo "gofmt needed:"; echo "$out"; exit 1; fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: Build
+        run: go build -o /dev/null .
+
+      - name: Tests
+        run: go test -count=1 -timeout 60m ./...
+
+      - name: OpenAPI drift
+        run: |
+          go run . openapi --out ../docs/openapi.json
+          git diff --exit-code ../docs/openapi.json
+
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}
+          "$(go env GOPATH)/bin/govulncheck" ./...
+
+  ui:
+    name: UI (Vue)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.21.0
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: npm audit (runtime dependencies)
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Type check
+        run: npx vue-tsc -b --force
+
+      - name: Build
+        run: npm run build
+
+      - name: API schema drift
+        run: |
+          npm run gen:api
+          git diff --exit-code src/api/schema.d.ts

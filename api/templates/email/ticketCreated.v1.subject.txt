@@ -1,0 +1,1 @@
+[{{.Ticket.Ref}}] New ticket in {{.GroupName}}: {{.Ticket.Subject}}

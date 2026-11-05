@@ -1,0 +1,9 @@
+{{define "content"}}{{template "ticketline" .}}
+<h1 style="margin:0 0 16px;font-size:20px;line-height:1.3;">{{.Ticket.Subject}}</h1>
+<p style="margin:0 0 8px;">{{if .RecipientName}}Hello {{.RecipientName}}, a{{else}}A{{end}} new ticket is waiting unassigned in the <strong>{{.GroupName}}</strong> queue.</p>
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0 0;font-size:14px;">
+{{if .RequesterName}}<tr><td style="padding:2px 16px 2px 0;color:#57534e;">Requester</td><td>{{.RequesterName}}</td></tr>{{end}}
+<tr><td style="padding:2px 16px 2px 0;color:#57534e;">Priority</td><td>{{.PriorityLabel}}</td></tr>
+<tr><td style="padding:2px 16px 2px 0;color:#57534e;">Group</td><td>{{.GroupName}}</td></tr>
+</table>
+{{template "button" .Ticket.URL}}{{end}}

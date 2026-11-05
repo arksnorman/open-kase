@@ -1,0 +1,11 @@
+{{define "content"}}{{if .RecipientName}}Hello {{.RecipientName}},
+
+{{end}}The {{.TargetLabel}} target of this ticket {{if .Breached}}was missed; it was due {{.DueAt}}.{{else}}is due soon: {{.DueAt}}.{{end}}
+
+{{.Ticket.Ref}}: {{.Ticket.Subject}}
+Priority: {{.PriorityLabel}}
+{{if .GroupName}}Group:    {{.GroupName}}
+{{end}}Assignee: {{if .AssigneeName}}{{.AssigneeName}}{{else}}Unassigned{{end}}
+
+Open the ticket: {{.Ticket.URL}}
+{{end}}

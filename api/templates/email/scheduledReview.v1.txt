@@ -1,0 +1,10 @@
+{{define "content"}}{{if .RecipientName}}Hello {{.RecipientName}},
+
+{{end}}Your scheduled {{.What}} on {{.Ticket.Ref}}: {{.Ticket.Subject}} was not sent.
+{{.Explanation}}
+
+It is kept for you: open the ticket to review the conversation, then send it now,
+reschedule, edit or cancel it.
+
+Open the ticket: {{.Ticket.URL}}
+{{end}}

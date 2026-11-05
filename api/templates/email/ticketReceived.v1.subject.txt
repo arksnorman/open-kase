@@ -1,0 +1,1 @@
+[{{.Ticket.Ref}}] We received your request: {{.Ticket.Subject}}

@@ -1,0 +1,7 @@
+{{define "content"}}{{if .RecipientName}}Hello {{.RecipientName}},
+
+{{end}}Your scheduled {{.What}} on {{.Ticket.Ref}}: {{.Ticket.Subject}} was cancelled and will not be sent.
+{{.Explanation}}
+
+Open the ticket: {{.Ticket.URL}}
+{{end}}

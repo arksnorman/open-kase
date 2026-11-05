@@ -1,0 +1,7 @@
+{{define "content"}}{{if .RecipientName}}Hello {{.RecipientName}},
+
+{{end}}You received a response on ticket {{.Ticket.Ref}}.
+
+{{.Ticket.Ref}}: {{.Ticket.Subject}}
+
+{{template "requesterlink" .Ticket}}{{end}}

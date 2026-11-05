@@ -1,0 +1,7 @@
+{{define "content"}}{{if .AuthorName}}{{.AuthorName}} added an internal note{{else}}An internal note was added{{end}} to {{.Ticket.Ref}}: {{.Ticket.Subject}}
+
+Internal notes are visible to the support team only. The note is not
+included in this email; open the ticket to read it.
+
+Open the ticket: {{.Ticket.URL}}
+{{end}}
