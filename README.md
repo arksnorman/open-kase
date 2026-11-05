@@ -77,3 +77,7 @@ For the MongoDB-backed tests, start a local `mongod --replSet rs0`, run `rs.init
 uses that URI by default. CI (`.github/workflows/ci.yml`) runs the full suite, and
 `.github/workflows/release.yml` publishes the image to GHCR on `v*` tags (`latest`, version) and on
 pushes to `main` (`edge`).
+
+## License
+
+open-kase is licensed under the [Apache License 2.0](LICENSE).

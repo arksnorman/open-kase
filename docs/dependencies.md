@@ -1,9 +1,11 @@
 # Dependencies and licenses
 
-Inventory for open-kase 0.1.0, from `api/go.mod` / `go list -m all` (licenses read from each
+open-kase itself is licensed under the [Apache License 2.0](../LICENSE).
+
+Inventory for open-kase 0.1.1, from `api/go.mod` / `go list -m all` (licenses read from each
 module's LICENSE file in the module cache) and from `ui/package.json` with the installed `ui/node_modules` (the `license`
 field of each package). Versions are pinned: Go modules by `go.sum`, npm packages by exact versions and `ui/package-lock.json`.
-Container images and native tools are pinned in the root `Dockerfile` and the compose file in `docs/install.md`.
+Container images and native tools are pinned in the root `Dockerfile` and the root `compose.yaml`.
 
 No dependency uses a copyleft license that applies to the distributed binary. MPL-2.0 appears only as one option of
 DOMPurify's dual license (MPL-2.0 OR Apache-2.0). The IBM Plex fonts are under the SIL Open Font License 1.1.
