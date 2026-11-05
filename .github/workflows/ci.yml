@@ -50,18 +50,28 @@ jobs:
       # initiated as a single-member replica set (transactions need a replica set).
       - name: Start MongoDB replica set
         run: |
-          docker run -d --name mongo -p 27017:27017 mongo:8.0.32 --replSet rs0 --bind_ip_all
-          for i in $(seq 1 60); do
-            docker exec mongo mongosh --quiet --eval 'db.runCommand({ping: 1}).ok' >/dev/null 2>&1 && break
+          fail() {
+            # Annotations are visible without signing in, so put the evidence there.
+            echo "::error title=MongoDB::$1 | container: $(docker ps -a --filter name=^mongo$ --format '{{.Status}}') | log: $(docker logs mongo 2>&1 | tail -n 8 | tr '\n' ' ' | cut -c1-1500)"
+            exit 1
+          }
+          docker run -d --name mongo -p 27017:27017 mongo:8.0.32 --replSet rs0 --bind_ip_all || fail "docker run failed"
+          out=""
+          for i in $(seq 1 120); do
+            out=$(docker exec mongo mongosh --quiet --eval 'db.runCommand({ping: 1}).ok' 2>&1) && [ "$out" = "1" ] && break
+            out="attempt $i: $out"; sleep 1
+          done
+          [ "$out" = "1" ] || fail "mongod did not answer ping: $(echo "$out" | tail -n 3 | tr '\n' ' ')"
+          for i in $(seq 1 30); do
+            out=$(docker exec mongo mongosh --quiet --eval \
+              "try { rs.status().ok } catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: '127.0.0.1:27017'}]}).ok }" 2>&1) && break
+            sleep 2
+          done
+          for i in $(seq 1 120); do
+            [ "$(docker exec mongo mongosh --quiet --eval 'db.hello().isWritablePrimary' 2>/dev/null)" = "true" ] && exit 0
             sleep 1
           done
-          docker exec mongo mongosh --quiet --eval \
-            "rs.initiate({_id: 'rs0', members: [{_id: 0, host: '127.0.0.1:27017'}]})"
-          for i in $(seq 1 60); do
-            [ "$(docker exec mongo mongosh --quiet --eval 'db.hello().isWritablePrimary')" = "true" ] && exit 0
-            sleep 1
-          done
-          echo "MongoDB did not become primary"; docker logs mongo; exit 1
+          fail "MongoDB did not become primary: $(echo "$out" | tail -n 3 | tr '\n' ' ')"
 
       - name: gofmt
         run: |
