@@ -1,0 +1,219 @@
+name: open-kase
+
+services:
+  mongo:
+    image: mongo:8.0.34
+    restart: unless-stopped
+    # Install the keyfile with the ownership and mode mongod requires, then
+    # hand over to the official entrypoint.
+    entrypoint:
+      - bash
+      - -c
+      - install -m 0400 -o mongodb -g mongodb /run/secrets/mongo_keyfile /tmp/mongo-keyfile && exec docker-entrypoint.sh "$$@"
+      - --
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--keyFile", "/tmp/mongo-keyfile"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo_root_password
+    secrets: [mongo_root_password, mongo_keyfile]
+    volumes:
+      - mongo-data:/data/db
+    # Initiates the single-member replica set on first start, then reports
+    # healthy once there is a primary. No port is published.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          mongosh --quiet -u root -p "$$(cat /run/secrets/mongo_root_password)" --authenticationDatabase admin --eval
+          "try { rs.status().ok } catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'mongo:27017'}]}).ok }; db.hello().isWritablePrimary"
+          | grep -q true
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 20s
+    stop_grace_period: 60s
+
+  redis:
+    image: redis:8.2.2-alpine
+    restart: unless-stopped
+    # Cache and presence only; the data is rebuildable, so persistence is off.
+    # The password comes from a secret file, so it does not show in the process list.
+    command:
+      - sh
+      - -c
+      - exec docker-entrypoint.sh redis-server --requirepass "$$(cat /run/secrets/redis_password)" --save "" --appendonly no --maxmemory 256mb --maxmemory-policy allkeys-lru
+    secrets: [redis_password]
+    healthcheck:
+      test: ["CMD-SHELL", 'REDISCLI_AUTH="$$(cat /run/secrets/redis_password)" redis-cli ping | grep -q PONG']
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  open-kase:
+    image: ghcr.io/arksnorman/open-kase:${OPEN_KASE_VERSION:-0.1.1}   # pinned; bump it when you upgrade
+    restart: unless-stopped
+    environment:
+      APP_ENV: production
+      MONGODB_URI: mongodb://root:${MONGO_PASSWORD}@mongo:27017/open_kase?replicaSet=rs0&authSource=admin
+      REDIS_URI: redis://:${REDIS_PASSWORD}@redis:6379/0
+      OPEN_KASE_MASTER_KEY_FILE: /run/secrets/master_key
+      # The bundled proxy reaches the app over the compose bridge network (Docker's
+      # default pools are inside 172.16.0.0/12). The app publishes no port itself.
+      OPEN_KASE_TRUSTED_PROXIES: 172.16.0.0/12
+    secrets: [master_key]
+    depends_on:
+      mongo: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    stop_grace_period: 30s
+
+  # TLS reverse proxy, profile "nginx" (the default in .env). It only proxies: the app serves
+  # the UI itself, with its own security headers, so nothing is served from disk here.
+  # ./certs holds fullchain.pem and privkey.pem. If they are missing at start, a self-signed
+  # pair for $SITE_NAME is generated into it. The Debian-based nginx image is used because
+  # the alpine ones do not include the openssl binary.
+  nginx:
+    image: nginx:1.30.6
+    profiles: [nginx]
+    restart: unless-stopped
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -eu
+        C=/etc/nginx/certs
+        S="$$SITE_NAME"
+        if [ ! -s $$C/fullchain.pem ] || [ ! -s $$C/privkey.pem ]; then
+          if ! printf %s "$$S" | grep -Eq '^[A-Za-z0-9.:-]+$$'; then
+            echo "SITE_NAME '$$S' may only contain letters, digits, dots, colons and hyphens" >&2
+            exit 1
+          fi
+          # An IPv4 address is a dotted quad, an IPv6 address contains a colon; anything else is a name.
+          if printf %s "$$S" | grep -Eq '^([0-9]{1,3}[.]){3}[0-9]{1,3}$$' || case "$$S" in *:*) true;; *) false;; esac; then
+            SAN=IP:$$S
+          else
+            SAN=DNS:$$S
+          fi
+          echo "no certificate in ./certs, generating a self-signed one for $$S"
+          (umask 077; openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -noenc \
+            -days 825 -subj "/CN=$$S" -addext "subjectAltName=$$SAN" \
+            -keyout $$C/privkey.pem -out $$C/fullchain.pem)
+          chmod 644 $$C/fullchain.pem
+        fi
+        # HSTS only for a certificate that is not self-signed (issuer differs from subject):
+        if [ "$$(openssl x509 -in $$C/fullchain.pem -noout -issuer_hash)" = "$$(openssl x509 -in $$C/fullchain.pem -noout -subject_hash)" ]; then
+          : > /etc/nginx/hsts.conf
+        else
+          echo 'add_header Strict-Transport-Security "max-age=31536000" always;' > /etc/nginx/hsts.conf
+        fi
+        exec /docker-entrypoint.sh nginx -g 'daemon off;'
+    environment:
+      SITE_NAME: ${SITE_NAME:-localhost}
+    configs:
+      - source: nginx_site
+        target: /etc/nginx/conf.d/default.conf
+    volumes:
+      - ./certs:/etc/nginx/certs
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    depends_on:
+      # restart: re-resolve the upstream when the app container is recreated
+      open-kase: { condition: service_healthy, restart: true }
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsk -o /dev/null https://127.0.0.1/health/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+
+  # TLS reverse proxy, profile "caddy". Certificates: Caddy's internal CA (self-signed) for
+  # localhost and IP addresses, Let's Encrypt for public domain names.
+  caddy:
+    image: caddy:2.11.8-alpine
+    profiles: [caddy]
+    restart: unless-stopped
+    configs:
+      - source: caddyfile
+        target: /etc/caddy/Caddyfile
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+      # To use your own certificate instead, uncomment the next line and the "tls" line
+      # in the Caddyfile below:
+      # - ./certs:/certs
+    ports:
+      # Same number inside and out: Caddy listens on the ports from the global options
+      # in its Caddyfile below.
+      - "${HTTP_PORT:-80}:${HTTP_PORT:-80}"
+      - "${HTTPS_PORT:-443}:${HTTPS_PORT:-443}"
+    depends_on:
+      open-kase: { condition: service_healthy }
+    healthcheck:
+      # the admin API on loopback answers once the configuration is loaded
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:2019/config/"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+
+configs:
+  nginx_site:
+    content: |
+      server_tokens off;
+      server {
+          listen 80 default_server;
+          return 301 https://$$host:${HTTPS_PORT:-443}$$request_uri;
+      }
+      server {
+          listen 443 ssl default_server;
+          http2 on;
+          ssl_certificate     /etc/nginx/certs/fullchain.pem;
+          ssl_certificate_key /etc/nginx/certs/privkey.pem;
+          ssl_protocols TLSv1.2 TLSv1.3;
+          include /etc/nginx/hsts.conf;
+          client_max_body_size 60m;       # attachments are limited by the app (10 MiB by default)
+          location / {
+              proxy_pass http://open-kase:8080;
+              proxy_http_version 1.1;
+              proxy_set_header Host $$http_host;    # keeps a non-default port: the API compares Origin with Host
+              proxy_set_header X-Forwarded-For $$remote_addr;   # outermost proxy: never pass on a client-sent value
+              proxy_set_header X-Forwarded-Proto $$scheme;
+              proxy_buffering off;                  # live updates (/api/v1/events) and /mcp stream
+              proxy_read_timeout 1h;
+              proxy_send_timeout 1h;
+          }
+      }
+  caddyfile:
+    content: |
+      {
+      	http_port ${HTTP_PORT:-80}
+      	https_port ${HTTPS_PORT:-443}
+      	auto_https disable_redirects
+      }
+      # Caddy's automatic redirect drops a non-default HTTPS port, so it is disabled above and
+      # replaced by this one.
+      http://:${HTTP_PORT:-80} {
+      	redir https://{host}:${HTTPS_PORT:-443}{uri} permanent
+      }
+      ${SITE_NAME:-localhost} {
+      	# tls /certs/fullchain.pem /certs/privkey.pem
+      	request_body {
+      		max_size 60MB
+      	}
+      	reverse_proxy open-kase:8080 {
+      		flush_interval -1 # live updates (/api/v1/events) and /mcp stream
+      	}
+      }
+
+secrets:
+  master_key:
+    file: ./secrets/master.key
+  mongo_root_password:
+    file: ./secrets/mongo_root_password
+  mongo_keyfile:
+    file: ./secrets/mongo_keyfile
+  redis_password:
+    file: ./secrets/redis_password
+
+volumes:
+  mongo-data:
+  caddy-data:
+  caddy-config:

@@ -13,13 +13,15 @@ Two ways to run it:
 
 Either way, put a TLS-terminating [reverse proxy](#reverse-proxy-and-tls) in front: session
 cookies are `Secure` outside `APP_ENV=development`, so browsers only keep them over HTTPS (or on
-`http://localhost`).
+`http://localhost`). The Docker Compose setup below bundles one (nginx or Caddy, your choice).
 
 ## Configuration
 
 Bootstrap configuration is small and comes from the environment (or the matching flag). Everything
 else (base URL, SMTP, limits, token lifetimes) is stored in MongoDB and edited in the UI under
-Settings → Configuration.
+Settings → Configuration. Set the **base URL** (Settings → Configuration → General) to the public
+address of the installation, for example `https://support.example.com`: email links are built from
+it, and the API also accepts requests whose `Origin` matches it.
 
 | Variable | Flag | Default | Purpose |
 | --- | --- | --- | --- |
@@ -47,13 +49,20 @@ application refuse to become ready.
 
 ## Docker Compose
 
-Requires Docker with Compose v2. MongoDB shares the host's Linux kernel, and MongoDB 8.0 refuses to
+Requires Docker with Compose v2.23 or newer (the proxy configuration is embedded in the
+repository's `compose.yaml` with `configs: content:`, which older versions reject; check `docker compose version`).
+MongoDB shares the host's Linux kernel, and MongoDB 8.0 refuses to
 start on kernels 6.19 to 7.0.13 because of a kernel bug (see
 [SERVER-125742](https://jira.mongodb.org/browse/SERVER-125742)); check `uname -r` and use a kernel
 older than 6.19 or 7.0.14 and newer. Pick a directory and create the master key:
 
 ```sh
-mkdir open-kase && cd open-kase
+# Get the two files, either by cloning the repository ...
+git clone https://github.com/arksnorman/open-kase.git open-kase && cd open-kase
+# ... or by downloading them into an empty directory:
+#   mkdir open-kase && cd open-kase
+#   curl -fsSLO https://raw.githubusercontent.com/arksnorman/open-kase/v0.1.1/compose.yaml
+#   curl -fsSLO https://raw.githubusercontent.com/arksnorman/open-kase/v0.1.1/.env.example
 mkdir secrets && chmod 700 secrets
 openssl rand -base64 32 > secrets/master.key
 chmod 600 secrets/master.key
@@ -67,101 +76,41 @@ chmod 600 secrets/mongo_keyfile
 # mongod reads the password file after dropping to its own user, so the file must be
 # world-readable; the secrets directory (mode 700) keeps it private on the host:
 chmod 644 secrets/mongo_root_password
-# Compose reads this file for the connection string below (hex, so no URL escaping needed):
-echo "MONGO_PASSWORD=$(cat secrets/mongo_root_password)" > .env
 # Redis requires a password too (hex again, so it can sit in REDIS_URI unescaped):
 openssl rand -hex 32 > secrets/redis_password
-echo "REDIS_PASSWORD=$(cat secrets/redis_password)" >> .env
-chmod 600 secrets/redis_password .env
+chmod 600 secrets/redis_password
+
+# Compose settings, from .env.example:
+cp .env.example .env
+# Compose reads the passwords from .env for the connection strings below:
+sed -i "s/^MONGO_PASSWORD=.*/MONGO_PASSWORD=$(cat secrets/mongo_root_password)/" .env
+sed -i "s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=$(cat secrets/redis_password)/" .env
+sed -i "s/^SITE_NAME=.*/SITE_NAME=support.example.com/" .env    # your own host name
+chmod 600 .env
 ```
 
-Save this as `compose.yaml`:
+The `.env` file (from [`.env.example`](../.env.example)) holds what `compose.yaml` reads:
 
-```yaml
-name: open-kase
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `COMPOSE_PROFILES` | `nginx` | Which bundled TLS proxy runs: `nginx` or `caddy`; empty for your own proxy (see [Reverse proxy and TLS](#reverse-proxy-and-tls)) |
+| `SITE_NAME` | `support.example.com` | Host name of the installation: goes into the self-signed certificate (nginx) or is the name Caddy gets a certificate for |
+| `HTTP_PORT`, `HTTPS_PORT` | `80`, `443` | Host ports the proxy publishes |
+| `OPEN_KASE_VERSION` | `0.1.1` | Image tag of `open-kase`; bump it to upgrade |
+| `MONGO_PASSWORD` | none | Must equal `secrets/mongo_root_password` |
+| `REDIS_PASSWORD` | none | Must equal `secrets/redis_password` |
 
-services:
-  mongo:
-    image: mongo:8.0.34
-    restart: unless-stopped
-    # Install the keyfile with the ownership and mode mongod requires, then
-    # hand over to the official entrypoint.
-    entrypoint:
-      - bash
-      - -c
-      - install -m 0400 -o mongodb -g mongodb /run/secrets/mongo_keyfile /tmp/mongo-keyfile && exec docker-entrypoint.sh "$$@"
-      - --
-    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--keyFile", "/tmp/mongo-keyfile"]
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo_root_password
-    secrets: [mongo_root_password, mongo_keyfile]
-    volumes:
-      - mongo-data:/data/db
-    # Initiates the single-member replica set on first start, then reports
-    # healthy once there is a primary. No port is published.
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - >-
-          mongosh --quiet -u root -p "$$(cat /run/secrets/mongo_root_password)" --authenticationDatabase admin --eval
-          "try { rs.status().ok } catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'mongo:27017'}]}).ok }; db.hello().isWritablePrimary"
-          | grep -q true
-      interval: 10s
-      timeout: 10s
-      retries: 12
-      start_period: 20s
-    stop_grace_period: 60s
+The services in `compose.yaml` (read the file; every setting has a comment):
 
-  redis:
-    image: redis:8.2.2-alpine
-    restart: unless-stopped
-    # Cache and presence only; the data is rebuildable, so persistence is off.
-    # The password comes from a secret file, so it does not show in the process list.
-    command:
-      - sh
-      - -c
-      - exec docker-entrypoint.sh redis-server --requirepass "$$(cat /run/secrets/redis_password)" --save "" --appendonly no --maxmemory 256mb --maxmemory-policy allkeys-lru
-    secrets: [redis_password]
-    healthcheck:
-      test: ["CMD-SHELL", 'REDISCLI_AUTH="$$(cat /run/secrets/redis_password)" redis-cli ping | grep -q PONG']
-      interval: 10s
-      timeout: 5s
-      retries: 6
+| Service | Profile | What it is |
+| --- | --- | --- |
+| `mongo` | always | `mongo:8.0.34` with authentication and a replica-set keyfile; initiates the single-member replica set `rs0` on first start; no published port |
+| `redis` | always | `redis:8.2.2-alpine` with a password, no persistence; no published port |
+| `open-kase` | always | `ghcr.io/arksnorman/open-kase:${OPEN_KASE_VERSION:-0.1.1}`: API, MCP and web UI on port 8080, no published port; trusts proxies in `172.16.0.0/12` |
+| `nginx` | `nginx` | `nginx:1.30.6`, TLS on `HTTP_PORT`/`HTTPS_PORT`, proxies to `open-kase:8080`; configuration inline (`configs:`) |
+| `caddy` | `caddy` | `caddy:2.11.8-alpine`, same role; configuration inline; data in the `caddy-data` and `caddy-config` volumes |
 
-  open-kase:
-    image: ghcr.io/arksnorman/open-kase:0.1.0   # pinned; bump it when you upgrade
-    restart: unless-stopped
-    environment:
-      APP_ENV: production
-      MONGODB_URI: mongodb://root:${MONGO_PASSWORD}@mongo:27017/open_kase?replicaSet=rs0&authSource=admin
-      REDIS_URI: redis://:${REDIS_PASSWORD}@redis:6379/0
-      OPEN_KASE_MASTER_KEY_FILE: /run/secrets/master_key
-      # The reverse proxy reaches the app through the Docker bridge network
-      # (default pools are inside 172.16.0.0/12). The port below is published
-      # on loopback only, so only this host can send X-Forwarded-For.
-      OPEN_KASE_TRUSTED_PROXIES: 172.16.0.0/12
-    secrets: [master_key]
-    depends_on:
-      mongo: { condition: service_healthy }
-      redis: { condition: service_healthy }
-    ports:
-      - "127.0.0.1:8080:8080"
-    stop_grace_period: 30s
-
-secrets:
-  master_key:
-    file: ./secrets/master.key
-  mongo_root_password:
-    file: ./secrets/mongo_root_password
-  mongo_keyfile:
-    file: ./secrets/mongo_keyfile
-  redis_password:
-    file: ./secrets/redis_password
-
-volumes:
-  mongo-data:
-```
+Run `docker compose config -q` to validate the file and your `.env`.
 
 Start the databases, then initialize the installation once. `init` creates the collections and
 indexes, the workspace, the single project with its Triage group, and the first administrator. It
@@ -177,9 +126,10 @@ docker compose run --rm open-kase doctor
 For scripted installs `init` also takes `--workspace-name`, `--admin-email`, `--admin-given-name`,
 `--admin-family-name` and `--password-stdin` (the password is never accepted as a flag).
 
-The application is now on `127.0.0.1:8080`, and the image's health check (`open-kase health`)
-shows in `docker compose ps`. Continue with the reverse proxy below. The compose file pins the
-release (`:0.1.0`); to upgrade, change the tag to the new version and run `docker compose pull &&
+The application is now running behind the proxy chosen in `COMPOSE_PROFILES`, and the image's
+health check (`open-kase health`) shows in `docker compose ps`. Continue with the reverse proxy
+below. The compose file pins the
+release (`:0.1.1`); to upgrade, set `OPEN_KASE_VERSION` in `.env` to the new version and run `docker compose pull &&
 docker compose up -d`. `latest` follows the newest release tag and `edge` is the head of `main`
 (published only after CI passed); neither is meant for production.
 
@@ -191,13 +141,80 @@ settings), otherwise users must run `docker login ghcr.io` with a token that has
 
 ## Reverse proxy and TLS
 
-Run Caddy (or nginx) on the host, listening on 80/443 and proxying to `127.0.0.1:8080`. Caddy gets
-and renews certificates by itself and forwards `Host` and `X-Forwarded-For` unchanged:
+The Compose file above includes two interchangeable TLS reverse proxies; `COMPOSE_PROFILES` in
+`.env` picks one (`nginx` or `caddy`, never both: they use the same ports). Only the proxy
+publishes ports (`HTTP_PORT`, default 80, and `HTTPS_PORT`, default 443); the `open-kase` service
+publishes none. The proxy sends everything to `open-kase:8080` and serves no files itself: the UI
+and its security headers (a CSP with an inline-script hash) come from the application, so the UI and
+the API share one origin.
+
+`OPEN_KASE_TRUSTED_PROXIES: 172.16.0.0/12` is the address range of the Compose bridge network that
+the proxy connects from, so the real client address from `X-Forwarded-For` is used for sign-in
+throttling and logging. It covers Docker's default pools; if your daemon uses others (the
+`192.168.0.0/16` pool is used once the `172.x` ones are exhausted, or `default-address-pools` is
+set), change it to match. After the first sign-in, check that the access log shows your real address
+(`docker compose logs open-kase`, field `clientIp`).
+
+After the first start, open `https://<SITE_NAME>/` and set **Settings → Configuration → General →
+base URL** to that address; email links need it.
+
+### nginx (`COMPOSE_PROFILES=nginx`)
+
+Certificates live in `./certs` (`fullchain.pem`, `privkey.pem`), a read-write bind mount.
+
+- With no certificate there, the container generates a self-signed one at start (EC P-256, 825 days,
+  CN and subject alternative name from `SITE_NAME`, key mode 600) and writes it to `./certs`.
+  Later restarts reuse it, so browsers see a stable certificate to trust. Delete the files to
+  regenerate. The first browser visit shows a certificate warning.
+- For a real certificate, put your files there before the first start (Let's Encrypt via certbot
+  on the host, a corporate CA, and so on): `cp fullchain.pem privkey.pem certs/`, then
+  `docker compose up -d` (or `docker compose restart nginx` after a renewal). The
+  `Strict-Transport-Security` header is added automatically whenever the certificate is not
+  self-signed.
+- Port 80 redirects to HTTPS. With a non-default `HTTPS_PORT` the redirect includes that port, and
+  `Host` is forwarded with its port (`$http_host`), which the API's `Origin` check needs.
+- The proxy buffers nothing and allows idle responses for an hour, for the live-update stream
+  (`/api/v1/events`) and MCP (`/mcp`); request bodies up to 60 MB pass (the app limits attachments).
+
+The image is the Debian-based `nginx`, not `nginx:*-alpine`: neither alpine variant ships the
+`openssl` binary, and installing it at start would need network access.
+
+### Caddy (`COMPOSE_PROFILES=caddy`)
+
+Caddy obtains certificates by itself and keeps them in the `caddy-data` volume.
+
+- For a public domain name in `SITE_NAME`, it gets and renews a Let's Encrypt certificate. The
+  name must resolve to this host and ports 80 and 443 must be reachable from the internet (so
+  leave `HTTP_PORT` and `HTTPS_PORT` at their defaults).
+- For `localhost` or an IP address it uses its own internal CA (browse to the exact name or IP in
+  `SITE_NAME`: Caddy picks the certificate by name): a certificate nobody trusts until
+  you import Caddy's root (`docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt .`).
+- To use your own certificate instead, uncomment the `./certs:/certs` volume and the `tls
+  /certs/fullchain.pem /certs/privkey.pem` line of the Caddyfile in `compose.yaml`, put the files in
+  `./certs` and run `docker compose up -d`. Add `header Strict-Transport-Security "max-age=31536000"`
+  to the site block once you are sure about HTTPS.
+- Live-update and MCP streams are flushed immediately (`flush_interval -1`), and request bodies are
+  limited to 60 MB.
+
+### Your own proxy instead
+
+To run Caddy, nginx or another proxy on the host (or another machine), remove the profile
+(`COMPOSE_PROFILES` empty or deleted in `.env`) and publish the app on loopback by adding this to
+the `open-kase` service:
+
+```yaml
+    ports:
+      - "127.0.0.1:8080:8080"
+```
+
+Then proxy to `127.0.0.1:8080`, forwarding `Host` unchanged (with its port, if not default) and
+`X-Forwarded-For`, without buffering streamed responses, and set `OPEN_KASE_TRUSTED_PROXIES` to the
+address the proxy connects from: for a proxy on the host, the bridge gateway (`172.16.0.0/12`
+covers it); for another machine, that machine's address, with the port published on an address it
+can reach. Caddy:
 
 ```
-# /etc/caddy/Caddyfile
 support.example.com {
-	encode zstd gzip
 	header Strict-Transport-Security "max-age=31536000"
 	request_body {
 		max_size 60MB
@@ -206,36 +223,27 @@ support.example.com {
 }
 ```
 
-With nginx:
+nginx:
 
 ```nginx
 server {
     listen 443 ssl;
     server_name support.example.com;
     # ssl_certificate / ssl_certificate_key (for example from certbot)
-    client_max_body_size 60m;          # attachments are limited by the app (10 MiB by default)
+    client_max_body_size 60m;
     add_header Strict-Transport-Security "max-age=31536000" always;
 
     location / {
         proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;
-        proxy_set_header Host $http_host;               # keep the port: the API compares Origin with Host
+        proxy_set_header Host $http_host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_buffering off;                            # live-update streams
-        proxy_read_timeout 120s;
+        proxy_buffering off;
+        proxy_read_timeout 1h;
     }
 }
 ```
-
-`OPEN_KASE_TRUSTED_PROXIES` must cover the address the proxy connects from. With the compose file
-above that is the Docker bridge gateway, which `172.16.0.0/12` includes; if your Docker uses other
-address pools, adjust it. After the first sign-in, check that the access log shows your real
-address (`docker compose logs open-kase`, field `clientIp`). If the proxy runs on another machine,
-change the port mapping to an address it can reach and list that proxy's address instead.
-
-Then open `https://support.example.com/` and set **Settings → Configuration → General → base URL**
-to that address; email links need it.
 
 ## Native binary with systemd
 

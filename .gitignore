@@ -8,6 +8,10 @@
 *.key
 *.pem
 
+# Compose runtime data (generated certificates, secret files)
+/certs/
+/secrets/
+
 # Editors / OS
 .DS_Store
 *.swp

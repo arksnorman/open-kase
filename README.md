@@ -35,13 +35,14 @@ With Docker Compose (MongoDB 8 as a single-node replica set, Redis and the publi
 mkdir open-kase && cd open-kase
 mkdir secrets && openssl rand -base64 32 > secrets/master.key
 sudo chown 65532:65532 secrets/master.key && chmod 600 secrets/master.key
-# save compose.yaml from docs/install.md, then:
+# put compose.yaml and .env.example from this repository here, create .env from .env.example (passwords, SITE_NAME,
+# COMPOSE_PROFILES=nginx or caddy for the bundled TLS proxy on ports 80/443), then:
 docker compose up -d mongo redis
 docker compose run --rm open-kase init      # creates the first administrator
 docker compose up -d
 ```
 
-The complete `compose.yaml`, TLS reverse proxy, systemd installation and upgrade steps are in
+The root `compose.yaml` (with the bundled nginx or Caddy TLS proxy), systemd installation and upgrade steps are in
 [`docs/install.md`](docs/install.md). A single host gives you transactions and backups; it is not
 a high-availability setup.
 

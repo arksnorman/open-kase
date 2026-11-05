@@ -11,3 +11,7 @@ docs
 **/*.key
 **/*.pem
 **/*.test
+compose.yaml
+.env.example
+certs
+secrets
