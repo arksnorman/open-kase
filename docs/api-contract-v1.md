@@ -151,6 +151,12 @@ The tag, hold reason and organisation scopes are not part of `tickets:all` and d
   `tickets:replyAsRequester`, a public message and no `thenStatusId`. `staff` needs `tickets:comment` for public
   replies and `tickets:internal` for notes. Omitted: `staff` when the token holds `tickets:comment` (or
   `tickets:all`), otherwise `requester`. Users always post as themselves.
+  With `as: "requester"`, the optional `contactId` authors the reply as another contact of the ticket's
+  organisation (a teammate of the requester) instead of the requester: `author.id` and `author.name` are that
+  contact's. The ticket needs an organisation and the contact must exist in the project with that organisation, else
+  `422` with field error `contactNotInOrganisation` (unknown contact: `notFound`). `contactId` without
+  `as: "requester"` is `422 notAllowed`; the requester's own ID equals omitting it. The reply is otherwise a
+  requester reply (reopens, ends a hold, never a first response, no `thenStatusId`).
 - Requester-side tokens never see staff identities: `author.id` of staff messages is `""` and `assignee` is `null`. Staff tokens see assignee and author IDs.
 - Every write made with a token (REST or MCP) is audited with the token as actor (`type: service`) plus the
   `scopes` that allowed it, never message bodies or secrets.
@@ -188,7 +194,7 @@ ticket Open. Full shapes (`Ticket`, `Message`, `Attachment`, `Draft`, ...) are i
 | `POST /tickets/{t}/assignments` | `{ groupId, assigneeId? }` + If-Match. Absent `assigneeId` keeps the assignee when still an active member of the target group, otherwise clears; `null` unassigns; an ID assigns (`422 assigneeId notEligible`) |
 | `POST /tickets/{t}/transitions` | `{ action, statusId?, holdReasonId?, note?, reason? }` + If-Match. `resolve`; `reopen` (Resolved to Open); `archive` (Resolved to Archived, final); `hold` (Open or Awaiting customer, needs `holdReasonId`); `setStatus` (an open or awaiting-customer status; any other status is `422` with field `statusId` code `notAllowed`). A transition not allowed from the current status is `409 invalidTransition` |
 | `GET /tickets/{t}/messages` | oldest first; `?visibility=public\|agent`. Integrations receive public messages only |
-| `POST /tickets/{t}/messages` | `{ visibility, body, attachmentIds?, expectedLastPublicId?, thenStatusId?, addSignature?, as? }` -> `201 Message` plus the updated `ticket`. See below |
+| `POST /tickets/{t}/messages` | `{ visibility, body, attachmentIds?, expectedLastPublicId?, thenStatusId?, addSignature?, as?, contactId? }` -> `201 Message` plus the updated `ticket`. See below |
 | `GET/PUT/DELETE /tickets/{t}/drafts/{visibility}` | the caller's private draft per audience; `PUT` takes optional `If-Match` on the draft version |
 | `GET /tickets/{t}/watchers`, `PUT/DELETE /tickets/{t}/watchers/me` | watching grants no access; each watcher's access is re-checked when listed |
 | `GET/POST /tickets/{t}/links`, `DELETE /tickets/{t}/links/{l}` | `relatedTo`, `duplicateOf`, `followUpTo` (addable) and `copiedFrom` (created by copy). A link is shown only when the caller can read the other ticket |

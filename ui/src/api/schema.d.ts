@@ -2834,6 +2834,8 @@ export interface components {
             attachmentIds?: string[];
             /** @description Markdown source; rendered without raw HTML. */
             body: string;
+            /** @description Only with as=requester: author the reply as this contact instead of the requester. The contact must belong to the ticket's organisation (contactNotInOrganisation otherwise; the ticket needs an organisation). The reply behaves like any requester reply. Omitted or the requester's own ID: the requester. */
+            contactId?: string;
             expectedLastPublicId?: string | null;
             /** @description (added) Also change the ticket status in the same transaction: the built-in Resolved status resolves the ticket, an open or awaiting-customer status is set like setStatus. Users with ticket.transition, tokens with tickets:write (posting as staff). An invalid transition fails the whole request; nothing is posted. */
             thenStatusId?: string | null;

@@ -330,6 +330,7 @@ type postMessageRequest struct {
 	ExpectedLastPublicId *string  `json:"expectedLastPublicId"`
 	ThenStatusId         *string  `json:"thenStatusId" doc:"(added) Also change the ticket status in the same transaction: the built-in Resolved status resolves the ticket, an open or awaiting-customer status is set like setStatus. Users with ticket.transition, tokens with tickets:write (posting as staff). An invalid transition fails the whole request; nothing is posted."`
 	AddSignature         *bool    `json:"addSignature" doc:"Users only, public replies: false skips your signature and the workspace signature. Absent or true: the server appends them (never shown in drafts). Never applied to agent notes, integration tokens or requester messages."`
+	ContactId            string   `json:"contactId" doc:"Only with as=requester: author the reply as this contact instead of the requester. The contact must belong to the ticket's organisation (contactNotInOrganisation otherwise; the ticket needs an organisation). The reply behaves like any requester reply. Omitted or the requester's own ID: the requester."`
 	As                   string   `json:"as" enum:"staff,requester" doc:"Integration tokens only: who authors the message. staff: the token as a bot under its name (public replies need tickets:comment, agent notes tickets:internal). requester: the ticket's requester contact (tickets:replyAsRequester; public only, no thenStatusId). Omitted: staff when the token holds tickets:comment (or tickets:all), otherwise requester. Users always post as themselves (requester: 422)."`
 }
 
@@ -344,7 +345,7 @@ func (a *api) postMessage(c *gin.Context) {
 	}
 	res, err := a.Tickets.PostMessage(c.Request.Context(), s, c.Param("t"), tickets.PostInput{Visibility: body.Visibility,
 		Body: body.Body, AttachmentIds: body.AttachmentIds, ExpectedLastPublicId: body.ExpectedLastPublicId, ThenStatusId: body.ThenStatusId,
-		As: body.As, NoSignature: body.AddSignature != nil && !*body.AddSignature})
+		As: body.As, ContactId: body.ContactId, NoSignature: body.AddSignature != nil && !*body.AddSignature})
 	respond(c, http.StatusCreated, postedMessageDTO{messageDTO: toMessage(res.Message), Ticket: toTicket(res.Ticket)}, err)
 }
 
