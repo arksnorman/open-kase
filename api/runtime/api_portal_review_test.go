@@ -400,8 +400,12 @@ func TestRequesterSideResolveStatesAndStatusChangedBy(t *testing.T) {
 	}
 
 	// by: staff, requester reply, automation (auto-resolve and hold ended).
+	// The staff resolve uses a staff token: its "staff" depends on the
+	// token's scopes surviving the outbox round trip (no other resolve in
+	// this test is by staff, so got["resolve"]["staff"] comes only from it).
+	_, staffTok := f.token("Back office", "tickets:read", "tickets:write")
 	e := mk("Staff resolves")
-	f.do("POST", tpath(e, "/transitions"), map[string]any{"action": "resolve"}, bearer(f.dana.Access), ifMatchV(f.version(e))).expect(200)
+	f.do("POST", tpath(e, "/transitions"), map[string]any{"action": "resolve"}, bearer(staffTok), ifMatchV(f.version(e))).expect(200)
 	f.do("POST", tpath(e, "/messages"), map[string]any{"visibility": "public", "body": "Not fixed", "as": "requester"}, bearer(tok)).expect(201)
 	c := mk("Auto resolved")
 	f.waiting(f.dana.Access, c)

@@ -454,7 +454,7 @@ func statusChangedBy(ev outbox.Record) string {
 	case ev.Actor.Type == audit.ActorSystem:
 		return "automation"
 	case ev.Transition == outbox.TransitionRequesterReply,
-		ev.Actor.Type == audit.ActorService && !access.StaffScopes(ev.Actor.Scopes):
+		ev.Actor.Type == audit.ActorService && len(ev.Actor.Scopes) > 0 && !access.StaffScopes(ev.Actor.Scopes):
 		return "requester"
 	}
 	return "staff"

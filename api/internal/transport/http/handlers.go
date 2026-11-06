@@ -185,13 +185,13 @@ func (a *api) getSettings(c *gin.Context) {
 	c.JSON(http.StatusOK, toSettings(snap.Redacted()))
 }
 
-// putSettingsRequest is the request body of putSettings.
-// putNotificationsRequest: requesterEmails is optional (absent keeps the stored value).
+// putNotificationsRequest: every field is optional (absent keeps the stored value).
 type putNotificationsRequest struct {
 	RequesterLinkBaseURL *string `json:"requesterLinkBaseUrl" doc:"See the settings document. Absent keeps the stored value."`
 	RequesterEmails      *bool   `json:"requesterEmails" doc:"Email contacts and CC addresses; absent keeps the stored value."`
 }
 
+// putSettingsRequest is the request body of putSettings.
 type putSettingsRequest struct {
 	Product settingsProductRequest `json:"product"`
 	Auth    settingsAuthRequest    `json:"auth"`

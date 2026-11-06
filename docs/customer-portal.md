@@ -70,7 +70,7 @@ it. Agents cannot change the organisation of a ticket your integration created.
 - **Attachments:** the token can upload with `POST /attachments` (multipart, field `file`), pass the returned IDs as `attachmentIds` when
   creating a ticket or posting a message, and download them with `GET /attachments/{a}/download`.
 - **Close:** resolve with `POST /tickets/{t}/transitions { "action": "resolve" }`. The portal token needs no `If-Match` (it sees no version). Resolving a
-  ticket also ends a hold. Resolving a ticket that is already resolved is `409 invalidTransition`; the customer reopens it by replying. Archiving happens automatically through auto-archive (`archiveAfterResolvedDays`, set by an admin) or by agents; archived is final, so to continue the conversation create a
+  ticket also ends a hold, and open-kase sends its usual "resolved" notice to the requester and CC addresses unless requester emails are off. Resolving a ticket that is already resolved is `409 invalidTransition`; the customer reopens it by replying. Archiving happens automatically through auto-archive (`archiveAfterResolvedDays`, set by an admin) or by agents; archived is final, so to continue the conversation create a
   follow-up (`POST /tickets/{t}/follow-up`).
 
 ## 5. Send notifications yourself (optional)
