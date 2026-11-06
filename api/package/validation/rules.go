@@ -81,7 +81,7 @@ var (
 	WebhookEventType = define(Rule{Field: "webhook.eventType", Kind: KindEnum, Required: true,
 		Choices: []string{"ticket.created", "ticket.updated", "ticket.message.public", "ticket.message.agentNote",
 			"ticket.assigned", "ticket.statusChanged",
-			"ticket.slaWarning", "ticket.slaBreached"}})
+			"ticket.slaWarning", "ticket.slaBreached", "ticket.followupReminder"}})
 	NotificationTestTo = define(Rule{Field: "notification.testTo", Kind: KindEmail, Required: true, MaxLen: 254})
 	DeliveryStatus     = define(Rule{Field: "delivery.status", Kind: KindEnum, Required: true,
 		Choices: []string{"pending", "retrying", "sent", "failed", "unknownOutcome", "skipped", "skippedUnconfigured"}})

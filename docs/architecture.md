@@ -223,7 +223,7 @@ exactly-once delivery; an uncertain outcome is recorded as `unknownOutcome`.
 
 **Webhooks** (`internal/webhooks`, `docs/webhooks.md`). Events: `ticket.created`, `ticket.updated`,
 `ticket.message.public`, `ticket.message.agentNote` (only for endpoints with the agent-note grant), `ticket.assigned`,
-`ticket.statusChanged`, `ticket.slaWarning`, `ticket.slaBreached`, `webhook.test`. Requests are unsigned. Each endpoint
+`ticket.statusChanged`, `ticket.slaWarning`, `ticket.slaBreached`, `ticket.followupReminder`, `webhook.test`. Requests are unsigned. Each endpoint
 has custom headers, auth `None`, `Basic` or `Token`, and an optional custom CA and client certificate. Credentials
 and keys are encrypted and write-only. Retries run 1 + the schedule in `webhooks/retry.go`. SSRF policy
 (`webhooks/client.go`): private networks are allowed (admins configure endpoints); link-local, unspecified, reserved

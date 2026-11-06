@@ -60,7 +60,7 @@ const loadError = ref<unknown>(null)
 const loading = ref(false)
 
 // Drafts
-const general = ref({ name: '', description: '', signature: '', baseUrl: '', requesterLink: '' })
+const general = ref({ name: '', description: '', signature: '', baseUrl: '', requesterLink: '', requesterEmails: true })
 const smtp = ref({ enabled: false, host: '', port: '587', username: '', fromAddress: '', fromName: '', tlsMode: 'starttls' as SmtpTlsMode, caCertificate: '', tlsSkipVerify: false })
 const passwordMode = ref<'keep' | 'replace' | 'clear'>('keep')
 const password = ref('')
@@ -88,6 +88,7 @@ function resetGeneral(s: Settings) {
     signature: s.product.signature,
     baseUrl: s.product.baseUrl,
     requesterLink: s.notifications.requesterLinkBaseUrl,
+    requesterEmails: s.notifications.requesterEmails,
   }
 }
 function resetSmtp(s: Settings) {
@@ -125,7 +126,7 @@ const generalDirty = computed(() => {
   const g = general.value
   return (
     g.name !== s.product.name || g.description.trim() !== s.product.description || g.signature.trim() !== s.product.signature || g.baseUrl !== s.product.baseUrl ||
-    g.requesterLink.trim() !== s.notifications.requesterLinkBaseUrl
+    g.requesterLink.trim() !== s.notifications.requesterLinkBaseUrl || g.requesterEmails !== s.notifications.requesterEmails
   )
 })
 const smtpDirty = computed(() => {
@@ -217,7 +218,7 @@ async function save(section: Section) {
       if (section === 'general') {
         const g = general.value
         doc.product = { ...(doc.product as object), name: g.name.trim(), description: g.description.trim(), signature: g.signature.trim(), baseUrl: g.baseUrl.trim() }
-        doc.notifications = { ...(doc.notifications as object), requesterLinkBaseUrl: g.requesterLink.trim() }
+        doc.notifications = { ...(doc.notifications as object), requesterLinkBaseUrl: g.requesterLink.trim(), requesterEmails: g.requesterEmails }
       } else if (section === 'email') {
         const d = smtp.value
         const port = Number(d.port)
@@ -379,6 +380,13 @@ async function sendTest() {
               <TextInput v-model="general.requesterLink" type="url" mono autocomplete="off" placeholder="https://portal.example.com/requests" />
             </FormField>
             <p v-if="requesterExample" class="m-0 text-xs text-muted">Example for ticket #1042: <span class="lg-mono break-all">{{ requesterExample }}</span></p>
+            <div class="flex items-start gap-3">
+              <SwitchInput id="requester-emails" v-model="general.requesterEmails" labelledby="requester-emails-l" describedby="requester-emails-d" class="mt-0.5" />
+              <div class="flex min-w-0 flex-col">
+                <strong id="requester-emails-l">Email contacts and CC addresses</strong>
+                <span id="requester-emails-d" class="text-xs text-muted">When off, contacts and CC addresses receive no emails (skipped deliveries are logged as “Requester emails off”); use webhooks instead. Staff emails are unchanged.</span>
+              </div>
+            </div>
             <div class="flex items-center gap-3">
               <BaseButton type="submit" variant="primary" :loading="saving === 'general'" :disabled="!generalDirty">Save</BaseButton>
               <span v-if="saved === 'general'" role="status" class="text-xs text-muted">Saved.</span>

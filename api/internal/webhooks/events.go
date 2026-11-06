@@ -12,6 +12,7 @@ const (
 	TypeTicketStatusChanged = "ticket.statusChanged"
 	TypeSLAWarning          = "ticket.slaWarning"
 	TypeSLABreached         = "ticket.slaBreached"
+	TypeFollowupReminder    = "ticket.followupReminder"
 	// TypeTest is sent only by the "test delivery" action.
 	TypeTest = "webhook.test"
 )
@@ -19,7 +20,7 @@ const (
 // EventTypes lists the selectable event types.
 func EventTypes() []string {
 	return []string{TypeTicketCreated, TypeTicketUpdated, TypeMessagePublic, TypeMessageAgentNote,
-		TypeTicketAssigned, TypeTicketStatusChanged, TypeSLAWarning, TypeSLABreached}
+		TypeTicketAssigned, TypeTicketStatusChanged, TypeSLAWarning, TypeSLABreached, TypeFollowupReminder}
 }
 
 // ValidEventType reports whether t can be selected for an endpoint.
@@ -44,6 +45,8 @@ func EventTypeFor(outboxType, visibility string) string {
 		return TypeTicketStatusChanged
 	case "ticket.slaWarning":
 		return TypeSLAWarning
+	case "ticket.followupReminder":
+		return TypeFollowupReminder
 	case "ticket.slaBreached":
 		return TypeSLABreached
 	}

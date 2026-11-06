@@ -353,6 +353,7 @@ type settingsDTO struct {
 
 type settingsNotificationsDTO struct {
 	RequesterLinkBaseURL string `json:"requesterLinkBaseUrl" doc:"Absolute http(s) base URL of the system that submits tickets. Requester emails link to {requesterLinkBaseUrl}/{ticket number} and never include message content or a link to this application. Empty: no link; the email asks the requester to check the system they used."`
+	RequesterEmails      bool   `json:"requesterEmails" doc:"Email contacts and CC addresses (default true). When false, no email goes to contacts or CC addresses (ticket received, replies, status notices, follow-up reminders; each is recorded as a skipped delivery with class requesterEmailsOff); staff emails are unchanged. Use webhooks to notify requesters instead."`
 }
 
 func toSettings(r settings.Redacted) settingsDTO {
@@ -366,6 +367,6 @@ func toSettings(r settings.Redacted) settingsDTO {
 		SMTP: settingsSMTPDTO{Enabled: r.SMTP.Enabled, Host: r.SMTP.Host, Port: r.SMTP.Port, Username: r.SMTP.Username,
 			PasswordConfigured: r.SMTP.PasswordConfigured, FromAddress: r.SMTP.FromAddress, FromName: r.SMTP.FromName, TLSMode: r.SMTP.TLSMode,
 			CACertificate: r.SMTP.CACertificate, TLSSkipVerify: r.SMTP.TLSSkipVerify},
-		Notifications: settingsNotificationsDTO{RequesterLinkBaseURL: r.Notifications.RequesterLinkBaseURL},
+		Notifications: settingsNotificationsDTO{RequesterLinkBaseURL: r.Notifications.RequesterLinkBaseURL, RequesterEmails: r.Notifications.RequesterEmailsEnabled()},
 	}
 }

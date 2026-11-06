@@ -2725,6 +2725,23 @@
         },
         "type": "object"
       },
+      "PutNotificationsRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "requesterEmails": {
+            "description": "Email contacts and CC addresses; absent keeps the stored value.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "requesterLinkBaseUrl": {
+            "description": "See the settings document.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "PutPreferencesRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2849,7 +2866,7 @@
           "notifications": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/SettingsNotificationsRequest"
+                "$ref": "#/components/schemas/PutNotificationsRequest"
               },
               {
                 "type": "null"
@@ -3947,24 +3964,19 @@
       },
       "SettingsNotifications": {
         "properties": {
+          "requesterEmails": {
+            "description": "Email contacts and CC addresses (default true). When false, no email goes to contacts or CC addresses (ticket received, replies, status notices, follow-up reminders; each is recorded as a skipped delivery with class requesterEmailsOff); staff emails are unchanged. Use webhooks to notify requesters instead.",
+            "type": "boolean"
+          },
           "requesterLinkBaseUrl": {
             "description": "Absolute http(s) base URL of the system that submits tickets. Requester emails link to {requesterLinkBaseUrl}/{ticket number} and never include message content or a link to this application. Empty: no link; the email asks the requester to check the system they used.",
             "type": "string"
           }
         },
         "required": [
+          "requesterEmails",
           "requesterLinkBaseUrl"
         ],
-        "type": "object"
-      },
-      "SettingsNotificationsRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "requesterLinkBaseUrl": {
-            "description": "Absolute http(s) base URL of the system that submits tickets. Requester emails link to {requesterLinkBaseUrl}/{ticket number} and never include message content or a link to this application. Empty: no link; the email asks the requester to check the system they used.",
-            "type": "string"
-          }
-        },
         "type": "object"
       },
       "SettingsProduct": {
