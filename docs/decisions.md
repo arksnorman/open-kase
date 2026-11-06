@@ -99,6 +99,7 @@ so superseded choices and their history are not kept here. Behaviour details liv
 | Decision | Reason |
 | --- | --- |
 | **One kind of API token**; the creator picks the scopes: `tickets:read\|create\|replyAsRequester\|comment\|internal\|write\|all`, `contacts:read\|write`, `tags:read\|write`, `holdReasons:read\|write`, `organisations:read\|write`. `tickets:all` excludes `replyAsRequester` and the non-ticket scopes | A customer-facing system and an AI agent differ only by scopes |
+| A requester reply (`as: "requester"`) may name another contact with `contactId`, accepted only when that contact belongs to the ticket's organisation (`422 contactNotInOrganisation`); it is authored as that contact and otherwise behaves exactly like a requester reply. See `customer-portal.md` | Customer accounts with several people replying on one ticket |
 | A token with a staff scope (`comment`, `internal`, `write`, `all`) gets the staff view and acts as a bot under its own name; other tokens see the requester-side view (public messages only, `version` 0) | Staff data never reaches requester-side tokens |
 | Tokens never exceed their scopes or what a human agent may do (no claim, release, drafts, redaction, reports or administration). With `tickets:write` they may transfer and assign tickets; a bot is never an assignee | Bounded automation |
 | Tokens are `kase_live_...`, shown once, stored as SHA-256 hashes, revoked at once. **Every token write is audited** with the token and the scope that allowed it | Traceable machine access |

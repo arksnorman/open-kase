@@ -21,7 +21,8 @@ AI; notifications go out by email and webhooks only.
   or Token auth, optional custom CA and client certificate), delivered at least once from a
   durable outbox.
 - **API and MCP.** REST under `/api/v1` and MCP at `/mcp`, with API tokens whose scopes the
-  creator picks (`tickets:*`, `contacts:*`, `tags:*`). Every token write is audited.
+  creator picks (`tickets:*`, `contacts:*`, `organisations:*`, `tags:*`, `holdReasons:*`). Every token write is audited.
+  Building a customer portal on top: [`docs/customer-portal.md`](docs/customer-portal.md).
 - **Security.** Server-side authorization on every route, short-lived JWTs with rotating refresh
   cookies, MFA, secrets encrypted under a master key kept outside the database, rate limits, and
   SSRF-guarded outbound calls.
@@ -55,6 +56,7 @@ a high-availability setup.
 | Command line | [`docs/cli.md`](docs/cli.md) |
 | REST API | [`docs/api-contract-v1.md`](docs/api-contract-v1.md), [`docs/openapi.json`](docs/openapi.json) (also served at `/api/v1/openapi.json`) |
 | MCP and webhooks | [`docs/mcp.md`](docs/mcp.md), [`docs/webhooks.md`](docs/webhooks.md) |
+| Customer portal integration | [`docs/customer-portal.md`](docs/customer-portal.md) |
 | Architecture and decisions | [`docs/architecture.md`](docs/architecture.md), [`docs/decisions.md`](docs/decisions.md) |
 | Performance | [Sizing and limits](docs/architecture.md#sizing-and-limits) |
 | Dependencies and licenses | [`docs/dependencies.md`](docs/dependencies.md) |
