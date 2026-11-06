@@ -69,7 +69,7 @@ func (s *Store) touchOrganisation(ctx context.Context, projectID bson.ObjectID, 
 }
 
 // List pages through the project's organisations by normalized name.
-func (r *OrganisationsRepository) List(ctx context.Context, projectID, q, active string, after *pagination.Cursor, limit int, withUsage bool) ([]organisations.Organisation, error) {
+func (r *OrganisationsRepository) List(ctx context.Context, projectID, q, active, externalRef string, after *pagination.Cursor, limit int, withUsage bool) ([]organisations.Organisation, error) {
 	pid := mustOID(projectID)
 	filter := bson.D{{Key: "projectId", Value: pid}}
 	if active != "all" {
@@ -80,6 +80,9 @@ func (r *OrganisationsRepository) List(ctx context.Context, projectID, q, active
 		filter = append(filter, bson.E{Key: "$or", Value: bson.A{
 			bson.D{{Key: "name", Value: re}}, bson.D{{Key: "externalRef", Value: re}},
 		}})
+	}
+	if externalRef != "" {
+		filter = append(filter, bson.E{Key: "externalRef", Value: externalRef})
 	}
 	filter, err := pageFilter(filter, "nameNormalized", after)
 	if err != nil {

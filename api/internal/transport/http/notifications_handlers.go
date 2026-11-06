@@ -372,7 +372,7 @@ func (a *api) listWebhookEventTypes(c *gin.Context) {
 		webhooks.TypeTicketStatusChanged: "The ticket's status changed (resolve, reopen, archive, set status, requester reply).",
 		webhooks.TypeSLAWarning:          "The first response (the SLA target) is due soon.",
 		webhooks.TypeSLABreached:         "The first-response deadline (the SLA target) was missed.",
-		webhooks.TypeFollowupReminder:    "A follow-up reminder was sent to the requester (autoResolveNotice is true on the last one before auto-resolve).",
+		webhooks.TypeFollowupReminder:    "A follow-up reminder was due (emailed to the requester unless requester emails are off; autoResolveNotice is true on the last one before auto-resolve).",
 	}
 	out := []webhookEventTypeDTO{}
 	for _, t := range webhooks.EventTypes() {

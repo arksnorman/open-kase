@@ -36,10 +36,11 @@ var (
 		q("groupId", "Only tickets in this group (intersected with access)."),
 		q("assignee", "`me`, `unassigned` or a user ID (signed-in users)."),
 		q("priority", "Comma-separated priorities 1–4."),
-		q("statusId", "Comma-separated status IDs."),
+		q("statusId", "Comma-separated status IDs (also for requester-side tokens)."),
 		q("tag", "Comma-separated tags; tickets carrying every tag."),
 		q("requestTypeId", "Comma-separated request type IDs."),
-		q("organisationId", "Comma-separated organisation IDs."),
+		q("organisationId", "Comma-separated organisation IDs (also for requester-side tokens)."),
+		q("requesterId", "A contact ID: only that contact's tickets (also for requester-side tokens). `assignee`, `priority`, `tag`, `requestTypeId` and `due` are staff only (`403 userRequired` for requester-side tokens)."),
 		qe("due", "SLA filter: `dueSoon` (warning time passed, not yet past due), `breached` (running past its deadline), `met` (first response in time), `missed` (first response after the deadline) or `running` (within time).", validation.ViewDue),
 	}
 	deliveryParams = []param{
@@ -252,7 +253,7 @@ func operations() []op {
 
 		// ---- Contacts ----
 		{Method: "GET", Path: "/api/v1/contacts", Id: "listContacts", Tag: "Customers", Summary: "List contacts", Auth: authUserOrToken,
-			Permission: permMember + " API tokens: `contacts:read`.", Response: contactDTO{}, Paged: true, Query: []param{q("q", "Name or email prefix.")}, Errors: []errSpec{errForbidden}},
+			Permission: permMember + " API tokens: `contacts:read`.", Response: contactDTO{}, Paged: true, Query: []param{q("q", "Name or email prefix."), q("externalId", "Exact match on the contact's external ID (at most one contact; combined with `q` it narrows further).")}, Errors: []errSpec{errForbidden}},
 		{Method: "POST", Path: "/api/v1/contacts", Id: "upsertContact", Tag: "Customers", Summary: "Create or update a contact by email",
 			Auth: authUserOrToken, Permission: permMember + " API tokens: `contacts:write`.", Request: upsertContactRequest{}, Response: contactDTO{},
 			Idempotent: true, Errors: []errSpec{errForbidden}, Example: map[string]any{"name": "Priya Raman", "email": "priya@acme.example", "externalId": "crm-1042"}},
@@ -263,6 +264,7 @@ func operations() []op {
 		{Method: "GET", Path: "/api/v1/organisations", Id: "listOrganisations", Tag: "Customers", Summary: "List organisations", Auth: authUserOrToken,
 			Permission: permMember + " API tokens: `organisations:read` or `organisations:write`.", Response: organisationDTO{}, Paged: true,
 			Query: []param{q("q", "Search the organisation name or external reference (case-insensitive substring, at most 100 characters)."),
+				q("externalRef", "Exact match on the external reference (at most one organisation; deactivated ones need `active=all`)."),
 				qe("active", "`true` (default; what pickers and filters use), `false` or `all`.", validation.OrganisationActiveFilter)},
 			Errors:      []errSpec{errForbidden},
 			Description: "By name. `contactCount` and `ticketCount` are reported to callers who manage organisations (admins, `organisations:write`); 0 for everyone else."},
@@ -290,7 +292,7 @@ func operations() []op {
 			Description: "Ordered by last update, newest first. Access filters apply before limits.",
 			Response:    ticketDTO{}, Paged: true, Query: ticketListParams, Errors: []errSpec{errForbidden}},
 		{Method: "POST", Path: "/api/v1/tickets", Id: "createTicket", Tag: "Tickets", Summary: "Create a ticket in a group (unassigned)",
-			Auth: authUserOrToken, Permission: permMember + " API tokens: `tickets:create` (requester-side token: the requester authors the first message and `priority` is recorded as requested; staff token: the bot authors it).",
+			Auth: authUserOrToken, Permission: permMember + " API tokens: `tickets:create` (requester-side token: the requester authors the first message and `priority` is recorded as requested; a staff token authors it as the bot only with `tickets:comment` (or `tickets:all`), otherwise the requester authors it; `priority` takes effect for any staff token).",
 			Request: createTicketRequest{}, Response: ticketDTO{}, Status: 201, Idempotent: true, Errors: []errSpec{errForbidden, {409, []string{"groupInactive"}}},
 			Example: map[string]any{"subject": "Cannot receive external email", "body": "Inbound mail bounces with 550 5.1.1.",
 				"requester": map[string]any{"name": "Priya Raman", "email": "priya@acme.example"}, "priority": 2,
@@ -318,12 +320,13 @@ func operations() []op {
 			Errors:  []errSpec{errTicket, errArchived, errForbidden, {409, []string{"groupInactive"}}},
 			Example: map[string]any{"groupId": "665f1c2b8e4a3d0012345678", "assigneeId": nil}},
 		{Method: "POST", Path: "/api/v1/tickets/:t/transitions", Id: "transitionTicket", Tag: "Tickets", Summary: "Resolve, reopen, archive, hold or set a status",
-			Auth: authUserOrToken, Permission: permMember + " (`ticket.transition`) and staff tokens (`tickets:write`).", Request: transitionTicketRequest{}, Response: ticketDTO{}, IfMatch: ifMatchRequired,
+			Auth: authUserOrToken, Permission: permMember + " (`ticket.transition`) and staff tokens (`tickets:write`). A requester-side token holding `tickets:replyAsRequester` may send `resolve` only.", Request: transitionTicketRequest{}, Response: ticketDTO{}, IfMatch: ifMatchRequired,
 			Errors: []errSpec{errTicket, errArchived, errForbidden, {409, []string{"invalidTransition"}}},
 			Description: "`hold` puts an Open or Awaiting customer ticket On hold: `holdReasonId` is required and the hold lasts exactly the reason's `maxDays` " +
 				"(`ticket.hold.until`); an optional `note` is saved as an internal note. Resolved and Archived tickets cannot be put on hold (`409 invalidTransition`). " +
 				"The ticket returns to Open on its own at `until` (assignee kept, the assignee is emailed), or earlier when staff change its status or the requester replies. " +
-				"`setStatus` cannot select On hold. The requester is never notified about holds, and the first-response SLA keeps running.",
+				"`setStatus` cannot select On hold. The requester is never notified about holds, and the first-response SLA keeps running. " +
+				"A requester-side token (`tickets:replyAsRequester`) closes its ticket with `resolve`: it sees no version, so `If-Match` is not required (and ignored); every other action is `403 userRequired` for it. Resolving a ticket that is already Resolved is `409 invalidTransition`; the requester reopens by replying.",
 			Example: map[string]any{"action": "resolve", "reason": "Customer confirmed the fix"}},
 		{Method: "GET", Path: "/api/v1/tickets/:t/messages", Id: "listMessages", Tag: "Messages", Summary: "Conversation (oldest first)",
 			Auth: authUserOrToken, Permission: permMember + " (agent notes need `message.readAgent`). API tokens: `tickets:read` for public messages; staff tokens with `tickets:internal` also agent notes.",

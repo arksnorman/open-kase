@@ -203,7 +203,7 @@ func listFilter(c *gin.Context) *tickets.Filter {
 		return parts
 	}
 	f := tickets.Filter{Assignee: c.Query("assignee"), StatusIds: split("statusId"), Tags: split("tag"),
-		RequestTypeIds: split("requestTypeId"), OrganisationIds: split("organisationId"), Due: c.Query("due")}
+		RequestTypeIds: split("requestTypeId"), OrganisationIds: split("organisationId"), RequesterId: strings.TrimSpace(c.Query("requesterId")), Due: c.Query("due")}
 	for _, p := range split("priority") {
 		n, err := strconv.Atoi(p)
 		if err != nil {

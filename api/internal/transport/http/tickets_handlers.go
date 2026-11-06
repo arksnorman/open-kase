@@ -266,9 +266,13 @@ func (a *api) transitionTicket(c *gin.Context) {
 	if !decode(c, &body) {
 		return
 	}
-	version, ok := ifMatch(c)
-	if !ok {
-		return
+	// Requester-side tokens (resolve only) see no version: If-Match is
+	// not required and ignored for them.
+	var version int64
+	if s.Principal.IsStaff() {
+		if version, ok = ifMatch(c); !ok {
+			return
+		}
 	}
 	t, err := a.Tickets.Transition(c.Request.Context(), s, c.Param("t"), version,
 		tickets.TransitionInput{Action: body.Action, StatusId: body.StatusId, Reason: body.Reason, HoldReasonId: body.HoldReasonId, Note: body.Note})

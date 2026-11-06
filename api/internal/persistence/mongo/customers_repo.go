@@ -224,10 +224,13 @@ func (r *CustomersRepository) GetContact(ctx context.Context, projectID, id stri
 }
 
 // ListContacts pages through a project's contacts by normalized email.
-func (r *CustomersRepository) ListContacts(ctx context.Context, projectID, prefix string, after *pagination.Cursor, limit int) ([]customers.Contact, error) {
+func (r *CustomersRepository) ListContacts(ctx context.Context, projectID, prefix, externalID string, after *pagination.Cursor, limit int) ([]customers.Contact, error) {
 	filter := bson.D{{Key: "projectId", Value: mustOID(projectID)}}
 	if prefix != "" {
 		filter = append(filter, bson.E{Key: "emailNormalized", Value: prefixRegex(prefix)})
+	}
+	if externalID != "" {
+		filter = append(filter, bson.E{Key: "externalId", Value: externalID})
 	}
 	filter, err := pageFilter(filter, "emailNormalized", after)
 	if err != nil {

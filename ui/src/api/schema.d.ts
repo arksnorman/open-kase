@@ -1325,7 +1325,7 @@ export interface paths {
         put?: never;
         /**
          * Create a ticket in a group (unassigned)
-         * @description **Permission:** Admins and agents. API tokens: `tickets:create` (requester-side token: the requester authors the first message and `priority` is recorded as requested; staff token: the bot authors it).
+         * @description **Permission:** Admins and agents. API tokens: `tickets:create` (requester-side token: the requester authors the first message and `priority` is recorded as requested; a staff token authors it as the bot only with `tickets:comment` (or `tickets:all`), otherwise the requester authors it; `priority` takes effect for any staff token).
          *
          *     **Idempotency:** send `Idempotency-Key` to make retries safe; the same key with a different body returns `409 idempotencyKeyReused`.
          */
@@ -1781,9 +1781,9 @@ export interface paths {
         put?: never;
         /**
          * Resolve, reopen, archive, hold or set a status
-         * @description `hold` puts an Open or Awaiting customer ticket On hold: `holdReasonId` is required and the hold lasts exactly the reason's `maxDays` (`ticket.hold.until`); an optional `note` is saved as an internal note. Resolved and Archived tickets cannot be put on hold (`409 invalidTransition`). The ticket returns to Open on its own at `until` (assignee kept, the assignee is emailed), or earlier when staff change its status or the requester replies. `setStatus` cannot select On hold. The requester is never notified about holds, and the first-response SLA keeps running.
+         * @description `hold` puts an Open or Awaiting customer ticket On hold: `holdReasonId` is required and the hold lasts exactly the reason's `maxDays` (`ticket.hold.until`); an optional `note` is saved as an internal note. Resolved and Archived tickets cannot be put on hold (`409 invalidTransition`). The ticket returns to Open on its own at `until` (assignee kept, the assignee is emailed), or earlier when staff change its status or the requester replies. `setStatus` cannot select On hold. The requester is never notified about holds, and the first-response SLA keeps running. A requester-side token (`tickets:replyAsRequester`) closes its ticket with `resolve`: it sees no version, so `If-Match` is not required (and ignored); every other action is `403 userRequired` for it. Resolving a ticket that is already Resolved is `409 invalidTransition`; the requester reopens by replying.
          *
-         *     **Permission:** Admins and agents. (`ticket.transition`) and staff tokens (`tickets:write`).
+         *     **Permission:** Admins and agents. (`ticket.transition`) and staff tokens (`tickets:write`). A requester-side token holding `tickets:replyAsRequester` may send `resolve` only.
          *
          *     **Versioning:** send `If-Match` with the resource's current `version`; a stale version returns `409 versionConflict`.
          */
@@ -2899,8 +2899,8 @@ export interface components {
         PutNotificationsRequest: {
             /** @description Email contacts and CC addresses; absent keeps the stored value. */
             requesterEmails?: boolean | null;
-            /** @description See the settings document. */
-            requesterLinkBaseUrl?: string;
+            /** @description See the settings document. Absent keeps the stored value. */
+            requesterLinkBaseUrl?: string | null;
         };
         PutPreferencesRequest: {
             emailPreferences?: {
@@ -4570,6 +4570,8 @@ export interface operations {
                 limit?: components["parameters"]["Limit"];
                 /** @description Name or email prefix. */
                 q?: string;
+                /** @description Exact match on the contact's external ID (at most one contact; combined with `q` it narrows further). */
+                externalId?: string;
             };
             header?: never;
             path?: never;
@@ -7298,6 +7300,8 @@ export interface operations {
                 limit?: components["parameters"]["Limit"];
                 /** @description Search the organisation name or external reference (case-insensitive substring, at most 100 characters). */
                 q?: string;
+                /** @description Exact match on the external reference (at most one organisation; deactivated ones need `active=all`). */
+                externalRef?: string;
                 /** @description `true` (default; what pickers and filters use), `false` or `all`. */
                 active?: "true" | "false" | "all";
             };
@@ -8697,14 +8701,16 @@ export interface operations {
                 assignee?: string;
                 /** @description Comma-separated priorities 1–4. */
                 priority?: string;
-                /** @description Comma-separated status IDs. */
+                /** @description Comma-separated status IDs (also for requester-side tokens). */
                 statusId?: string;
                 /** @description Comma-separated tags; tickets carrying every tag. */
                 tag?: string;
                 /** @description Comma-separated request type IDs. */
                 requestTypeId?: string;
-                /** @description Comma-separated organisation IDs. */
+                /** @description Comma-separated organisation IDs (also for requester-side tokens). */
                 organisationId?: string;
+                /** @description A contact ID: only that contact's tickets (also for requester-side tokens). `assignee`, `priority`, `tag`, `requestTypeId` and `due` are staff only (`403 userRequired` for requester-side tokens). */
+                requesterId?: string;
                 /** @description SLA filter: `dueSoon` (warning time passed, not yet past due), `breached` (running past its deadline), `met` (first response in time), `missed` (first response after the deadline) or `running` (within time). */
                 due?: "dueSoon" | "breached" | "met" | "missed" | "running";
             };

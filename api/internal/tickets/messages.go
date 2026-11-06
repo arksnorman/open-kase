@@ -292,6 +292,7 @@ func (s *Service) postMessage(ctx context.Context, scope *access.ProjectScope, r
 	}
 
 	for attempt := 1; ; attempt++ {
+		contactChange := ""
 		t, err := s.load(ctx, scope, ref)
 		if err != nil {
 			return PostResult{}, err
@@ -363,6 +364,7 @@ func (s *Service) postMessage(ctx context.Context, scope *access.ProjectScope, r
 					return PostResult{}, errContactNotInOrganisation()
 				}
 				msg.Author.Id, msg.Author.Name = c.Id, c.Name
+				contactChange = "contact:" + c.Id
 			}
 			eligible := false
 			if t.Assignee != nil {
@@ -396,6 +398,9 @@ func (s *Service) postMessage(ctx context.Context, scope *access.ProjectScope, r
 		}
 		if in.scheduledID != "" {
 			ev.Changes = append(ev.Changes, "scheduled")
+		}
+		if contactChange != "" {
+			ev.Changes = append(ev.Changes, contactChange)
 		}
 		m.Audit = []audit.Event{ev}
 		m.Outbox = []outbox.Event{s.outboxEvent(scope, outbox.MessageCreated, t.Id, in.Visibility, now)}

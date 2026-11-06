@@ -79,7 +79,7 @@ recorded with the event, not from a later state.
 | --- | --- | --- |
 | `ticket.created` | A ticket was created (by an agent or through the API) | `subject`, `priority` (1–4), `requestedPriority` (when an integration asked for one), `status` `{id, name, category}`, `group` `{id, name}`, `requestType` `{id, name}`, `source` (`web`/`api`), `requester` `{id, name, email, externalId}`, `organisation` `{id, name, externalRef}` (`null` when none), `ccEmails` (array), `createdAt` |
 | `ticket.updated` | Subject, priority, request type or organisation changed | `changes` (field names), `subject`, `priority`, `requestType` `{id}`, `organisation` `{id, name, externalRef}` (`null` when none) |
-| `ticket.message.public` | A public reply was added by staff, an agent token (bot) or the requester | `subject`, `requester`, `organisation`, `ccEmails` (same shapes as `ticket.created`), `message` `{id, visibility: "public", author {context: staff\|bot\|contact, name}, body (raw Markdown), attachments [{id, filename, size, contentType}], createdAt}`. A file a redaction removed before the payload was built (`removeAttachments`) is `{id, removed: true}` with no other member |
+| `ticket.message.public` | A public reply was added by staff, an agent token (bot) or the requester | `subject`, `requester`, `organisation`, `ccEmails` (same shapes as `ticket.created`), `message` `{id, visibility: "public", author {context: staff\|bot\|contact, id (contact only), name}, body (raw Markdown), attachments [{id, filename, size, contentType}], createdAt}`. A file a redaction removed before the payload was built (`removeAttachments`) is `{id, removed: true}` with no other member |
 | `ticket.message.agentNote` | An agent-only note was added — **only with `includeAgentNotes`** | same shape as above with `visibility: "agent"` and the note body |
 | `ticket.assigned` | The ticket was claimed, released, assigned or moved to another group | `group` `{id, name}`; with `includeAgentNotes` also `assignee` `{id, name}` or `null`. Staff identities are not sent to public endpoints |
 | `ticket.statusChanged` | Resolve, reopen, archive, set status, or a requester reply that reopened the ticket | `subject`, `requester`, `organisation`, `ccEmails` (as `ticket.created`), `status` `{id, name, category}`, `transition` (`resolve`, `reopen`, `archive`, `hold`, `holdEnded`, `setStatus`, `requesterReply`) |
@@ -94,7 +94,13 @@ recorded with the event, not from a later state.
 
 Note on `ticket.revision`: it is the ticket's internal version after the event. Every change,
 including staff-only activity, advances it, so a gap between revisions only tells you that
-something you were not sent happened in between — never what it was.
+something you were not sent happened in between — never what it was. Follow-up reminders do
+not advance it, so a `ticket.followupReminder` repeats the current revision: receivers should
+ignore events with a *lower* revision than the one they already applied, not equal ones.
+
+`message.author.id` is present only when `author.context` is `contact`: the requester's contact ID, or
+the teammate's when the reply was posted with `contactId`. Compare it with `requester.id` to tell them
+apart. Staff and bot authors never have an `id` in webhooks.
 
 ## Authenticating deliveries
 

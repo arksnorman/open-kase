@@ -48,6 +48,8 @@ const isNote = computed(() => props.message.visibility === 'agent')
 /** Staff wear the headset, bots (tokens) the robot, the requester the person icon. */
 const avatarRole = computed<'requester' | 'bot' | 'staff'>(() => (props.message.author.context === 'contact' ? 'requester' : props.message.author.context === 'bot' ? 'bot' : 'staff'))
 const isRequester = computed(() => avatarRole.value === 'requester')
+/** A contact of the ticket's organisation who is not the requester (replied through contactId). */
+const isTeammate = computed(() => isRequester.value && props.message.author.id !== props.ticket.requester.id)
 const isBot = computed(() => props.message.author.context === 'bot')
 const label = computed(
   () =>
@@ -83,7 +85,7 @@ async function download(a: Attachment) {
         <template #icon><IconLock :size="13" stroke="1.75" aria-hidden="true" /></template>
         Agent note<span class="sr-only">, not visible to requester</span>
       </BaseBadge>
-      <BaseBadge v-else-if="isRequester" tone="requester">Requester</BaseBadge>
+      <BaseBadge v-else-if="isRequester" tone="requester">{{ isTeammate ? 'Contact' : 'Requester' }}</BaseBadge>
       <BaseBadge v-else tone="public">
         <template #icon><IconWorld :size="13" stroke="1.75" aria-hidden="true" /></template>
         Public

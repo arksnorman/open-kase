@@ -236,7 +236,7 @@ type scopeDTO struct {
 // token; owner decision 2026-10-31).
 var scopeDescriptions = map[string]string{
 	access.ScopeTicketsRead:             "Read tickets and their public messages (with a staff scope also groups, agents and canned replies)",
-	access.ScopeTicketsCreate:           "Create tickets for a requester contact (with a staff scope the token writes the first message as staff)",
+	access.ScopeTicketsCreate:           "Create tickets for a requester contact (a token with tickets:comment or tickets:all writes the first message as the bot; any other token as the requester)",
 	access.ScopeTicketsReplyAsRequester: "Post public replies as the ticket's requester (like a customer reply: reopens, owes a response)",
 	access.ScopeTicketsComment:          "Post public replies as staff under the integration's name (a staff reply; meets the first response target)",
 	access.ScopeTicketsInternal:         "Read and write internal notes",

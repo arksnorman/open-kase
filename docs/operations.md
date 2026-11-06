@@ -149,11 +149,12 @@ client certificate, make the receiver accept both old and new values, update the
 
 ## Requester emails
 
-Settings → Configuration → Email has a **Email contacts and CC addresses** switch
+Settings → Configuration → General has an **Email contacts and CC addresses** switch
 (`notifications.requesterEmails`, default on). When it is off, no email goes to requester contacts or
 CC addresses (ticket received, replies, resolved/archived notices, follow-up reminders); staff emails
 are unchanged. Each suppressed email is recorded as a skipped delivery with error class
-`requesterEmailsOff`, checked at send time, so jobs queued before the switch are skipped too. Use
+`requesterEmailsOff`, checked at send time, so jobs queued before the switch are skipped too. While SMTP
+is disabled or unconfigured, deliveries are recorded as `smtpNotConfigured` instead, whatever the switch says. Use
 webhooks (including `ticket.followupReminder`, see `webhooks.md`) to notify requesters instead.
 
 ## SMTP

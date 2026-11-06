@@ -125,8 +125,8 @@ refused from the next request after revocation. Send `Authorization: Bearer kase
 | Scope | Grants |
 | --- | --- |
 | `tickets:read` | tickets and their public messages and attachments; with a staff scope also groups, the member directory and canned replies |
-| `tickets:create` | create tickets and follow-ups (with `tickets:read`) for a requester contact; `priority` applies when the token is staff, otherwise it is recorded as `requestedPriority` |
-| `tickets:replyAsRequester` | public replies **as the ticket's requester** (`author.context = "contact"`; may reopen the ticket, owes a response, never a first response) |
+| `tickets:create` | create tickets and follow-ups (with `tickets:read`) for a requester contact; `priority` applies when the token is staff, otherwise it is recorded as `requestedPriority`. The first message is authored by the bot only when the token holds `tickets:comment` (or `tickets:all`), otherwise by the requester contact |
+| `tickets:replyAsRequester` | public replies **as the ticket's requester** (`author.context = "contact"`; may reopen the ticket, owes a response, never a first response); also lets a requester-side token **resolve** its tickets (`POST /tickets/{t}/transitions {"action":"resolve"}`, no `If-Match` needed) |
 | `tickets:comment` | public replies **as staff** under the token's name (`author.context = "bot"`; counts as a staff reply for the SLA) |
 | `tickets:internal` | read and write agent notes (the only way a token sees private content) |
 | `tickets:write` | status, priority, tags, request type, organisation, group and assignee |
@@ -154,8 +154,11 @@ The tag, hold reason and organisation scopes are not part of `tickets:all` and d
   With `as: "requester"`, the optional `contactId` authors the reply as another contact of the ticket's
   organisation (a teammate of the requester) instead of the requester: `author.id` and `author.name` are that
   contact's. The ticket needs an organisation and the contact must exist in the project with that organisation, else
-  `422` with field error `contactNotInOrganisation` (unknown contact: `notFound`). `contactId` without
-  `as: "requester"` is `422 notAllowed`; the requester's own ID equals omitting it. The reply is otherwise a
+  `422` with field error `contactNotInOrganisation`. `contactId` is
+  accepted when `as` is `"requester"` and also when `as` is omitted and defaults to requester (a token without
+  `tickets:comment`); with `as: "staff"` (or a default of `staff`) it is `422 notAllowed`. The requester's own ID equals
+  omitting it. An unknown contact ID answers `contactNotInOrganisation` as well, so contact IDs cannot be probed.
+  The audit event of the message records `contact:<id>`. The reply is otherwise a
   requester reply (reopens, ends a hold, never a first response, no `thenStatusId`).
 - Requester-side tokens never see staff identities: `author.id` of staff messages is `""` and `assignee` is `null`. Staff tokens see assignee and author IDs.
 - Every write made with a token (REST or MCP) is audited with the token as actor (`type: service`) plus the
@@ -172,7 +175,7 @@ The tag, hold reason and organisation scopes are not part of `tickets:all` and d
 | `GET/PUT /users/{u}/groups` | read or replace a user's groups (`{ groupIds }`) |
 | `GET /members` | read-only directory of users with `role`, groups and active state; filters `q`, `groupId`, `userId`, `active` |
 | `GET/POST /users`, `GET/PATCH /users/{u}`, `PUT /users/{u}/password` | admin user management: `{ email, username?, givenName, middleName?, familyName?, password?, isAdmin?, sendInvitation? }`; `name` is read-only |
-| `GET/POST /contacts`, `GET /contacts/{c}` | requesters; `POST` upserts by email; optional `externalId` and `organisationId` (`""` clears, unknown ID is `422`, inactive organisation `422 organisationInactive`) |
+| `GET/POST /contacts`, `GET /contacts/{c}` | requesters; `GET /contacts?q=&externalId=` (`externalId` is an exact match, `acct-1` never matches `acct-10`; combined with `q` it narrows further); `POST` upserts by `externalId` first, then by email (a pair that identifies two different contacts, or an email that already carries another `externalId`, is `409`); optional `externalId` and `organisationId` (`""` clears, unknown ID is `422`, inactive organisation `422 organisationInactive`) |
 | `GET/POST /organisations`, `GET/PATCH/DELETE /organisations/{o}` | customer organisations (`name`, `externalRef`, `active`); the organisation is set explicitly on contacts and tickets and never inferred. `409 organisationExists`, `409 organisationRefTaken`, `409 organisationInUse` on delete while any contact or ticket references it (deactivate instead). Counts only for managers |
 | `GET/POST /integrations`, `PATCH/DELETE /integrations/{i}` | API tokens (admin, users only); `PATCH` renames; scopes and token never change after issue; `409 integrationRevoked` |
 | `GET /statuses`, `GET /request-types` | built-in statuses in order: Open, Awaiting customer, On hold, Resolved, Archived; request types are separate from priority |
@@ -185,14 +188,14 @@ ticket Open. Full shapes (`Ticket`, `Message`, `Attachment`, `Draft`, ...) are i
 
 | Route | Notes |
 | --- | --- |
-| `GET /tickets` | `?view=&q=&groupId=&cursor=&limit=` plus filters. Views: `all` (default), `myWork`, `unassigned` (my groups), `watching`, `awaitingCustomer`, `onHold`, `dueSoon`, `resolved`, `archived`. `q` is a ticket number or a subject substring. Sorted by `updatedAt` descending. Staff filters (comma-separated, combinable with any view): `priority`, `tag` (all listed), `statusId`, `requestTypeId`, `organisationId`, `assignee=me\|unassigned\|<id>`, `due=dueSoon\|breached\|met\|missed\|running` |
+| `GET /tickets` | `?view=&q=&groupId=&cursor=&limit=` plus filters. Views: `all` (default), `myWork`, `unassigned` (my groups), `watching`, `awaitingCustomer`, `onHold`, `dueSoon`, `resolved`, `archived`. `q` is a ticket number or a subject substring. Sorted by `updatedAt` descending. Filters (comma-separated, combinable with any view): `statusId`, `organisationId` and `requesterId` (one contact ID: that contact's tickets) work for staff and for requester-side tokens (they only narrow what the token already reads); `priority`, `tag` (all listed), `requestTypeId`, `assignee=me\|unassigned\|<id>` and `due=dueSoon\|breached\|met\|missed\|running` are staff only (`403 userRequired` for requester-side tokens) |
 | `POST /tickets` | `{ subject, body, requester: { contactId } \| { name, email, externalId?, organisationId? }, priority?, requestTypeId?, groupId?, attachmentIds?, organisationId?, ccEmails? }` -> `201` + `Location`. The ticket enters the group (default Triage) unassigned. `ccEmails`: up to 10 addresses copied on requester emails. Requires `tickets:create` for tokens; `Idempotency-Key` supported |
 | `GET /tickets/{t}` | one ticket |
 | `PATCH /tickets/{t}` | `{ priority?, requestTypeId?, tags?, organisationId?, ccEmails? }` + **If-Match**. `subject` is locked for staff (`403 subjectLocked`); only the token that created a ticket may change its subject. Signed-in users cannot change `organisationId` on a ticket created through the API or MCP (`403 organisationManagedByIntegration`); tokens can. Tags replace the set and each added tag must be in the catalog (`422 unknownTag`) |
 | `POST /tickets/{t}/claim` | **If-Match**, group members only. Atomic: exactly one concurrent claim wins, the others get `409 ticketAlreadyClaimed`. Keeps status and group; non-member `403 notGroupMember` |
 | `POST /tickets/{t}/release` | `{ reason }` (3-500 characters, required) + If-Match; assignee or admin; `409 ticketNotAssigned` |
 | `POST /tickets/{t}/assignments` | `{ groupId, assigneeId? }` + If-Match. Absent `assigneeId` keeps the assignee when still an active member of the target group, otherwise clears; `null` unassigns; an ID assigns (`422 assigneeId notEligible`) |
-| `POST /tickets/{t}/transitions` | `{ action, statusId?, holdReasonId?, note?, reason? }` + If-Match. `resolve`; `reopen` (Resolved to Open); `archive` (Resolved to Archived, final); `hold` (Open or Awaiting customer, needs `holdReasonId`); `setStatus` (an open or awaiting-customer status; any other status is `422` with field `statusId` code `notAllowed`). A transition not allowed from the current status is `409 invalidTransition` |
+| `POST /tickets/{t}/transitions` | `{ action, statusId?, holdReasonId?, note?, reason? }` + If-Match. `resolve`; `reopen` (Resolved to Open); `archive` (Resolved to Archived, final); `hold` (Open or Awaiting customer, needs `holdReasonId`); `setStatus` (an open or awaiting-customer status; any other status is `422` with field `statusId` code `notAllowed`). A transition not allowed from the current status (including resolving an already Resolved ticket) is `409 invalidTransition`. A requester-side token holding `tickets:replyAsRequester` may send `resolve` only: it sees no version, so `If-Match` is not required (and ignored); it is audited with the token as actor and behaves like a staff resolve (`ticket.statusChanged` with transition `resolve`, SLA stopped, reminders cleared). Archive, reopen, hold and setStatus stay staff only (`403 userRequired`); the requester reopens by replying. Without `tickets:replyAsRequester` (and without a staff scope) every action is `403 userRequired` |
 | `GET /tickets/{t}/messages` | oldest first; `?visibility=public\|agent`. Integrations receive public messages only |
 | `POST /tickets/{t}/messages` | `{ visibility, body, attachmentIds?, expectedLastPublicId?, thenStatusId?, addSignature?, as?, contactId? }` -> `201 Message` plus the updated `ticket`. See below |
 | `GET/PUT/DELETE /tickets/{t}/drafts/{visibility}` | the caller's private draft per audience; `PUT` takes optional `If-Match` on the draft version |
@@ -294,7 +297,7 @@ durable job deletes the bytes. Emails and webhooks already delivered cannot be r
 
 - `GET/PUT /settings` (admin; secrets redacted): `product` (`name`, `description`, `baseUrl`, `signature`),
   `auth` (`accessTokenTtlSeconds`, `refreshTokenTtlHours`, `requireAdminMfa`), `files` (attachment and message
-  limits), `notifications.requesterLinkBaseUrl`, `smtp`. `PUT` is guarded by `configVersion` (`If-Match`); absent
+  limits), `notifications` (`requesterLinkBaseUrl`, `requesterEmails`; both optional, absent keeps the stored value), `smtp`. `PUT` is guarded by `configVersion` (`If-Match`); absent
   optional sections keep the stored value. Product settings live in MongoDB; running processes pick up changes.
 - **SMTP.** `GET/PUT /settings/smtp`, `POST /settings/smtp/test { to }` (admin). Fields `enabled`, `host`, `port`,
   `username`, write-only `password`, `fromAddress`, `fromName`, `tlsMode` (`starttls` default, `tls`, or `none` for
@@ -302,8 +305,13 @@ durable job deletes the bytes. Emails and webhooks already delivered cannot be r
   by default. Enabling needs `host`, `fromAddress` and `product.baseUrl`. When a password is stored and the
   destination weakens or changes (host, port, username, `tlsMode`, `tlsSkipVerify` on, new CA), the password must
   be sent again (`422 smtp.password required`). Mail is sent with `github.com/wneessen/go-mail`.
-- **Who gets email.** Requesters (contacts) get a received notice, a "response received" notice without the reply
-  text, and resolved/archived notices; links use `notifications.requesterLinkBaseUrl` when set. Staff get links to
+- **Who gets email.** Unless the switch **Email contacts and CC addresses** (`notifications.requesterEmails`,
+  Settings, Configuration, General; default on) is off, requesters (contacts) and CC addresses get a received notice, a "response received" notice without the reply
+  text, and resolved/archived notices; follow-up reminders; links use `notifications.requesterLinkBaseUrl` when set. With the switch off no email goes to
+  contacts or CC addresses; each is recorded as a skipped delivery with class `requesterEmailsOff` (checked at send
+  time, also for already queued jobs), and staff emails are unchanged. While SMTP is disabled the delivery is recorded
+  as `smtpNotConfigured` instead. A reply posted as a teammate (`contactId`) emails nobody on the customer side, like
+  any requester reply. Staff get links to
   the SPA: the assignee, watchers (`watcherUpdates` preference) and the group queue while unassigned
   (`queueUpdates`). Agent notes notify with a link only, never the text. Authors never receive their own notice;
   recipient access is re-checked just before sending. Mail has a stable `Message-ID`; delivery is at least once.

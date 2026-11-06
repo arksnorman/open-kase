@@ -81,7 +81,7 @@ func TestReplyAsOrganisationContact(t *testing.T) {
 	// Rejections.
 	post(tok, map[string]any{"contactId": gus}).expectFieldCode(t, "contactNotInOrganisation")
 	post(tok, map[string]any{"contactId": loner}).expectFieldCode(t, "contactNotInOrganisation")
-	post(tok, map[string]any{"contactId": "000000000000000000000000"}).expectFieldCode(t, "notFound")
+	post(tok, map[string]any{"contactId": "000000000000000000000000"}).expectFieldCode(t, "contactNotInOrganisation")
 	post(tok, map[string]any{"contactId": "bad"}).expect(422)
 	post(both, map[string]any{"as": "staff", "contactId": sam}).expectFieldCode(t, "notAllowed")
 	post(f.dana.Access, map[string]any{"as": "staff", "contactId": sam}).expectFieldCode(t, "notAllowed")

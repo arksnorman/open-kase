@@ -40,7 +40,7 @@ const (
 // Message author kinds.
 const (
 	AuthorUser        = "user"        // staff member
-	AuthorContact     = "contact"     // the requester, posted through a requester token
+	AuthorContact     = "contact"     // a contact (the requester or, with contactId, another contact of the organisation) posted through a token
 	AuthorIntegration = "integration" // an agent token (a bot acting as support staff)
 )
 
@@ -335,6 +335,7 @@ type Query struct {
 	Tags            []string // tickets carrying every tag
 	RequestTypeIds  []string
 	OrganisationIds []string
+	RequesterId     string
 	// WarnBefore selects tickets whose earliest SLA warning time has
 	// passed (due soon or breached), the dueSoon view.
 	WarnBefore *time.Time

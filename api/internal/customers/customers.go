@@ -65,7 +65,7 @@ type Repository interface {
 	OrganisationExists(ctx context.Context, projectID, id string) (bool, error)
 	// FindContact matches by external ID first, then normalized email.
 	FindContact(ctx context.Context, projectID, externalID, emailNormalized string) (Contact, error)
-	ListContacts(ctx context.Context, projectID, prefix string, after *pagination.Cursor, limit int) ([]Contact, error)
+	ListContacts(ctx context.Context, projectID, prefix, externalID string, after *pagination.Cursor, limit int) ([]Contact, error)
 }
 
 // Service implements contact management.
@@ -163,17 +163,20 @@ func (s *Service) GetContact(ctx context.Context, scope *access.ProjectScope, id
 }
 
 // ListContacts pages through contacts ordered by email, optionally filtered
-// by an email prefix.
-func (s *Service) ListContacts(ctx context.Context, scope *access.ProjectScope, q string, after *pagination.Cursor, limit int) (pagination.Page[Contact], error) {
+// by an email prefix and by an exact external ID.
+func (s *Service) ListContacts(ctx context.Context, scope *access.ProjectScope, q, externalID string, after *pagination.Cursor, limit int) (pagination.Page[Contact], error) {
 	if err := scope.Require(access.CapContactRead); err != nil {
 		return pagination.Page[Contact]{}, err
 	}
 	var v validation.Collector
 	v.String(validation.SearchQuery, "q", q)
+	if externalID != "" {
+		v.String(validation.ContactExternalID, "externalId", externalID)
+	}
 	if err := v.Err(); err != nil {
 		return pagination.Page[Contact]{}, err
 	}
-	rows, err := s.repo.ListContacts(ctx, scope.Project.Id, users.NormalizeEmail(q), after, limit+1)
+	rows, err := s.repo.ListContacts(ctx, scope.Project.Id, users.NormalizeEmail(q), externalID, after, limit+1)
 	if err != nil {
 		return pagination.Page[Contact]{}, err
 	}
@@ -203,9 +206,10 @@ func (s *Service) RequesterByID(ctx context.Context, scope *access.ProjectScope,
 
 // OrganisationContact returns a project contact for a reply posted on behalf
 // of a teammate of the requester. The caller has already been authorised to
-// reply as the requester and checks the contact's organisation.
+// reply as the requester and checks the contact's organisation. An unknown
+// contact fails like one of another organisation (no existence oracle).
 func (s *Service) OrganisationContact(ctx context.Context, scope *access.ProjectScope, id string) (Contact, error) {
-	notFound := fault.Field("contactId", "notFound", "No contact with this ID exists in the project.")
+	notFound := fault.Field("contactId", "contactNotInOrganisation", "The contact must belong to the ticket's organisation.")
 	if !validation.ValidID(id) {
 		return Contact{}, notFound
 	}

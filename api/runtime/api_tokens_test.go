@@ -209,7 +209,7 @@ func TestRequesterVersusAgentToken(t *testing.T) {
 		t.Fatalf("requester token got staff data: %v", got)
 	}
 	f.do("PATCH", tpath(key), map[string]any{"priority": 1}, bearer(req)).expect(403, "userRequired")
-	f.do("POST", tpath(key, "/transitions"), map[string]any{"action": "resolve"}, bearer(req), ifMatchV(1)).expect(403, "userRequired")
+	f.do("POST", tpath(key, "/transitions"), map[string]any{"action": "archive"}, bearer(req), ifMatchV(1)).expect(403, "userRequired")
 	f.do("GET", "/api/v1/groups", nil, bearer(req)).expect(403, "userRequired")
 	f.do("GET", "/api/v1/macros", nil, bearer(req)).expect(403, "userRequired")
 	// A requester reply is the contact's.

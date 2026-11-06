@@ -62,7 +62,7 @@ type Repository interface {
 	// name or external reference (case-insensitive substring); withUsage fills
 	// the counts.
 	// active is "true", "false" or "all".
-	List(ctx context.Context, projectID, q, active string, after *pagination.Cursor, limit int, withUsage bool) ([]Organisation, error)
+	List(ctx context.Context, projectID, q, active, externalRef string, after *pagination.Cursor, limit int, withUsage bool) ([]Organisation, error)
 	Get(ctx context.Context, projectID, id string) (Organisation, error)
 	// Usage returns the contact and ticket counts per organisation id.
 	Usage(ctx context.Context, projectID string, ids []string) (map[string][2]int64, error)
@@ -118,7 +118,7 @@ func validate(o Organisation) error {
 // List pages through organisations ordered by name (staff users and tokens
 // with organisations:read or organisations:write). Counts are reported to
 // callers who manage organisations.
-func (s *Service) List(ctx context.Context, scope *access.ProjectScope, q, active string, after *pagination.Cursor, limit int) (pagination.Page[Organisation], error) {
+func (s *Service) List(ctx context.Context, scope *access.ProjectScope, q, active, externalRef string, after *pagination.Cursor, limit int) (pagination.Page[Organisation], error) {
 	if err := scope.Require(access.CapOrganisationRead); err != nil {
 		return pagination.Page[Organisation]{}, err
 	}
@@ -128,10 +128,13 @@ func (s *Service) List(ctx context.Context, scope *access.ProjectScope, q, activ
 	var v validation.Collector
 	v.String(validation.SearchQuery, "q", q)
 	v.String(validation.OrganisationActiveFilter, "active", active)
+	if externalRef != "" {
+		v.String(validation.OrganisationExternalRef, "externalRef", externalRef)
+	}
 	if err := v.Err(); err != nil {
 		return pagination.Page[Organisation]{}, err
 	}
-	rows, err := s.repo.List(ctx, scope.Project.Id, strings.TrimSpace(q), active, after, limit+1, scope.Can(access.CapOrganisationManage))
+	rows, err := s.repo.List(ctx, scope.Project.Id, strings.TrimSpace(q), active, externalRef, after, limit+1, scope.Can(access.CapOrganisationManage))
 	if err != nil {
 		return pagination.Page[Organisation]{}, err
 	}

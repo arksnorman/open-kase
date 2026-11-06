@@ -10,19 +10,18 @@ An admin creates it in the web app under Settings, Integrations (or `POST /api/v
 
 | Scope | Why |
 | --- | --- |
-| `tickets:read` | list and read tickets and their public messages |
-| `tickets:create` | open tickets for a contact |
-| `tickets:replyAsRequester` | post customer replies |
-| `tickets:write` | resolve and archive tickets, and set the ticket organisation |
-| `contacts:read`, `contacts:write` | create and update the people on a customer account |
-| `organisations:read`, `organisations:write` | create and update customer accounts |
+| `tickets:read` | list and read tickets and their public messages and attachments |
+| `tickets:create` | open tickets for a contact (and attach files) |
+| `tickets:replyAsRequester` | post customer replies, and resolve (close) a ticket |
+| `contacts:read`, `contacts:write` | read, create and update the people on a customer account |
+| `organisations:read`, `organisations:write` | read, create and update customer accounts |
 
-**Never grant `tickets:internal` or `tickets:comment`.** `tickets:internal` exposes agent notes, and
-`tickets:comment` posts as staff. Your portal shows customers what they are allowed to see; the token should not
+**Do not grant `tickets:write`, `tickets:internal`, `tickets:comment` or `tickets:all`.** Any of those makes the token
+a staff token: it then sees staff names and the assignee, tags and `version`, may set the effective priority, assign
+and transfer tickets, archive, reopen and hold them, and (with `tickets:comment` or `tickets:all`) its messages are posted as a staff bot. `tickets:internal` also exposes agent notes. Without them the token is
+**requester-side**: it sees public messages only, no assignee, tags or SLA, `version` is always `0`, a `priority` sent on create is only recorded as the
+requested priority, and everything it writes is authored by a customer contact. Your portal shows customers what they are allowed to see; the token should not
 be able to see more. Keep the token on your server, never in the browser.
-
-`tickets:write` makes this a staff token: responses include `version` (needed for `If-Match`), assignee and tags.
-Without `tickets:internal` it still never sees agent notes.
 
 ## 2. One organisation per customer account, contacts with `externalId`
 
@@ -31,7 +30,7 @@ Without `tickets:internal` it still never sees agent notes.
 - Create a contact for each person who uses the portal: `POST /contacts { name, email, externalId,
   organisationId }`. `externalId` is your user ID; `POST` upserts by email. Store the returned `id`.
 - When an account closes, deactivate the organisation (`PATCH /organisations/{o} { active: false }`). Organisations
-  in use cannot be deleted.
+  in use cannot be deleted. `PATCH /organisations/{o}` needs `If-Match: <version>` (the `version` from the organisation).
 
 ## 3. Set `organisationId` on every ticket
 
@@ -54,32 +53,40 @@ it. Agents cannot change the organisation of a ticket your integration created.
 ## 4. List, reply, close
 
 - **List an account's tickets:** `GET /tickets?organisationId=<id>` (combine with `view=resolved`,
-  `view=archived`, `statusId=` and `cursor=` as needed). Before showing a ticket opened by ID, check that its
+  `view=archived`, `statusId=` and `cursor=` as needed). `GET /tickets?requesterId=<contact id>` lists one person's tickets. These filters work with
+  the portal token; assignee, tag, priority, request type and due filters do not (`403 userRequired`). Before showing a ticket opened by ID, check that its
   `organisation.id` is the signed-in customer's organisation: the token can read every ticket, so your portal is
   the access check.
 - **Reply as a customer:** `POST /tickets/{t}/messages { "body": "...", "visibility": "public", "as": "requester" }`.
   Add `"contactId": "<id>"` when the person replying is not the ticket's requester; the contact must belong to the
-  ticket's organisation (otherwise `422 contactNotInOrganisation`) and the message is authored under their name. A
-  customer reply reopens a resolved ticket, ends a hold and never counts as a first response.
-- **Close:** resolve, then archive. `POST /tickets/{t}/transitions { "action": "resolve" }` with
-  `If-Match: <version>`, then later `{ "action": "archive" }` with the new version. Archived tickets are final; to
-  continue the conversation create a follow-up (`POST /tickets/{t}/follow-up`).
+  ticket's organisation (otherwise `422 contactNotInOrganisation`, also for an unknown contact) and the message is authored under their name. A
+  customer reply reopens a resolved ticket, ends a hold and never counts as a first response. Like a requester reply, a
+  teammate reply emails nobody on the customer side: notify the others yourself from the `ticket.message.public` webhook
+  (section 5: `message.author.id`, `requester` and `ccEmails`).
+- **Attachments:** the token can upload with `POST /attachments` (multipart, field `file`), pass the returned IDs as `attachmentIds` when
+  creating a ticket or posting a message, and download them with `GET /attachments/{a}/download`.
+- **Close:** resolve with `POST /tickets/{t}/transitions { "action": "resolve" }`. The portal token needs no `If-Match` (it sees no version). Resolving a
+  ticket that is already resolved is `409 invalidTransition`; the customer reopens it by replying. Archiving happens automatically through auto-archive (`archiveAfterResolvedDays`, set by an admin) or by agents; archived is final, so to continue the conversation create a
+  follow-up (`POST /tickets/{t}/follow-up`).
 
 ## 5. Send notifications yourself (optional)
 
 By default open-kase emails requesters and CC addresses (ticket received, new reply, status changes, follow-up
 reminders). If your application sends its own emails or in-app notifications:
 
-1. Turn off **Requester emails** under Settings, Configuration (General section) (`notifications.requesterEmails: false` in
-   `PUT /settings`). Contacts and CC addresses then get no email from open-kase; each suppressed email is listed as
-   a skipped delivery with reason `requesterEmailsOff`. Staff emails are unchanged.
+1. Turn off **Email contacts and CC addresses** under Settings, Configuration, General (`notifications.requesterEmails: false` in
+   `PUT /settings`; an absent `requesterLinkBaseUrl` keeps the stored link). Contacts and CC addresses then get no email from open-kase; each suppressed email is listed as
+   a skipped delivery with reason `requesterEmailsOff`. Staff emails are unchanged. While SMTP is not enabled, deliveries are
+   recorded as `smtpNotConfigured` instead, whatever the switch says.
 2. Register a webhook endpoint (Settings, Webhooks) for `ticket.created`, `ticket.message.public`,
    `ticket.statusChanged` and `ticket.followupReminder`. Each of these payloads carries `requester`
    (`id`, `name`, `email`, `externalId`), `organisation` (`id`, `name`, `externalRef`, or `null`), `subject` and
-   `ccEmails`, so you can notify the right people without calling the API back.
+   `ccEmails`, so you can notify the right people without calling the API back. In `ticket.message.public`, `message.author` is
+   `{context, id, name}`; `id` is the contact's ID for a customer author (compare it with `requester.id` to see a teammate), so notify the
+   requester, the CC addresses and the other contacts except the author.
 3. Handle `ticket.followupReminder`: open-kase is waiting for the customer. When `autoResolveNotice` is `true` this
    is the last reminder and the ticket will be resolved automatically if nobody replies; tell the customer so.
 
-Delivery is at least once: de-duplicate on `eventId` and use `ticket.revision` to ignore older events. See
+Delivery is at least once: de-duplicate on `eventId` and use `ticket.revision` to ignore events with a *lower* revision (follow-up reminders do not advance it). See
 [webhooks.md](webhooks.md) for authentication and retries, and [api-contract-v1.md](api-contract-v1.md) for the
 full API.

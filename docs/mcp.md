@@ -45,13 +45,13 @@ A missing scope answers `insufficientScope`, a user-only tool `userRequired`, ex
 | Tool | REST equivalent | Requester-side token | Staff token | Users |
 | --- | --- | --- | --- | --- |
 | `ticketsList`, `ticketsSearch`, `ticketsGet` | `GET /tickets`, `/search`, `/tickets/{t}` + `/messages` | `tickets:read`, public messages only | `tickets:read`; agent notes as well with `tickets:internal` | agents: their groups' tickets and open/awaiting-customer/on-hold tickets assigned to them; admins: all |
-| `ticketsCreate` | `POST /tickets` | `tickets:create` (the requester writes the first message) | `tickets:create` (the bot writes it) | admins and agents |
+| `ticketsCreate` | `POST /tickets` | `tickets:create` (the requester writes the first message) | `tickets:create` (the bot writes it only with `tickets:comment` or `tickets:all`, otherwise the requester) | admins and agents |
 | `ticketsFollowUp` | `POST /tickets/{t}/follow-up` | `tickets:create` + `tickets:read` | same | admins and agents |
 | `ticketsCopy` | `POST /tickets/{t}/copy` | — (`staffOnly`) | `tickets:create` + `tickets:read` | admins and agents |
 | `ticketsReply` | `POST /tickets/{t}/messages` (public) | `tickets:comment` (as the requester) | `tickets:comment` (as the bot; a staff reply) | admins and agents |
 | `ticketsAddNote` | `POST /tickets/{t}/messages` (agent) | — (`insufficientScope`) | `tickets:internal` | admins and agents |
 | `ticketsUpdate` | `PATCH /tickets/{t}` | `subject` only, on tickets it created | `tickets:write` (priority, tags, request type, `organisationId`) | admins and agents |
-| `ticketsTransition` | `POST /tickets/{t}/transitions` | — (`userRequired`) | `tickets:write` | admins and agents |
+| `ticketsTransition` | `POST /tickets/{t}/transitions` | `tickets:replyAsRequester`, `resolve` only, no `expectedVersion` needed (other actions `userRequired`) | `tickets:write` | admins and agents |
 | `ticketsAssign` | `POST /tickets/{t}/assignments` | — (`userRequired`) | `tickets:write`; the assignee must be an active member of the group, the bot never is | admins and agents |
 | `ticketsClaim` | `POST /tickets/{t}/claim` | — | — (`userRequired`) | members of the ticket's group |
 | `groupsList` | `GET /groups` | — (`userRequired`) | `tickets:read` (all groups) | agents: own groups; admins: all |
@@ -122,7 +122,7 @@ Common arguments:
 
 | Tool | Annotations | Arguments | Result |
 | --- | --- | --- | --- |
-| `ticketsList` | read-only | `view?` (`myWork`, `unassigned`, `watching`, `awaitingCustomer`, `onHold`, `dueSoon`, `resolved`, `archived`, `all`; user-only views are refused for tokens), `q?`, `groupId?`, `cursor?`, `limit?` | `{ items: Ticket[], nextCursor }` |
+| `ticketsList` | read-only | `view?` (`myWork`, `unassigned`, `watching`, `awaitingCustomer`, `onHold`, `dueSoon`, `resolved`, `archived`, `all`; user-only views are refused for tokens), `q?`, `groupId?`, `statusId?`, `organisationId?` (comma-separated IDs), `requesterId?` (a contact ID), `cursor?`, `limit?` | `{ items: Ticket[], nextCursor }` |
 | `ticketsSearch` | read-only | `query` (search words, phrases in quotes, `-word` exclusions, or a ticket number; ≤ 100 chars), `cursor?`, `limit?` | `{ items: SearchHit[], nextCursor, total, totalCapped, exactMatch: Ticket \| null }` — the REST `/search` engine: subjects and the messages the caller may read, plain-text snippets with UTF-16 highlight ranges; `exactMatch` is the ticket named by a number (`42` or `#42`) |
 | `ticketsGet` | read-only | `ticket`, `includeMessages?` (default true), `messagesCursor?`, `messagesLimit?` | `{ ticket: Ticket, messages?: { items: Message[], nextCursor } }` |
 | `ticketsCreate` | not destructive | `subject`, `body`, `requester` `{ contactId }` or `{ name, email, externalId? }`, `priority?` (1–4), `requestTypeId?`, `groupId?`, `organisationId?`, `ccEmails?`, `idempotencyKey?` | `Ticket` (unassigned, in the group or Triage). From a requester-side token, `priority` is stored as `requestedPriority` |
@@ -137,7 +137,7 @@ Common arguments:
 | `groupsList` | read-only | `cursor?`, `limit?` | `{ items: Group[], nextCursor }` |
 | `agentsList` | read-only | `cursor?`, `limit?` | `{ items: Member[], nextCursor }` — each person's role, groups and active state |
 | `statusesList` | read-only | — | `{ items: Status[] }` |
-| `contactsList` | read-only | `q?` (name or email prefix), `cursor?`, `limit?` | `{ items: Contact[], nextCursor }` |
+| `contactsList` | read-only | `q?` (name or email prefix), `externalId?` (exact), `cursor?`, `limit?` | `{ items: Contact[], nextCursor }` |
 | `contactsGet` | read-only | `contactId` | `Contact` |
 | `contactsUpsert` | not destructive, idempotent | `name`, `email`, `externalId?`, `organisationId?` (omitted: unchanged; empty: clears) | `{ contact: Contact, created: boolean }` (an existing contact with the email is updated) |
 | `cannedRepliesList` | read-only | — | `{ items: Macro[] }` |
@@ -146,7 +146,7 @@ Common arguments:
 | `holdReasonsCreate` | not destructive | `name`, `maxDays` (1–365) | `HoldReason`; `holdReasonExists` when the name is taken |
 | `holdReasonsUpdate` | not destructive | `holdReasonId`, `name?`, `maxDays?`, `expectedVersion?` | `HoldReason`; a new `maxDays` affects only later holds |
 | `holdReasonsDelete` | destructive | `holdReasonId`, `expectedVersion?` | `{ deleted }`; `holdReasonInUse` while a ticket is on hold with it |
-| `organisationsList` | read-only | `q?`, `active?` (`true` default, `false`, `all`), `cursor?`, `limit?` | `{ items: Organisation[], nextCursor }` — by name; counts for managers only |
+| `organisationsList` | read-only | `q?`, `active?` (`true` default, `false`, `all`), `externalRef?` (exact), `cursor?`, `limit?` | `{ items: Organisation[], nextCursor }` — by name; counts for managers only |
 | `organisationsGet` | read-only | `organisationId` | `Organisation` |
 | `organisationsCreate` | not destructive | `name`, `externalRef?` | `Organisation`; `organisationExists` / `organisationRefTaken` |
 | `organisationsUpdate` | not destructive | `organisationId`, `name?`, `externalRef?` (empty clears), `active?` (false deactivates), `expectedVersion?` | `Organisation` |

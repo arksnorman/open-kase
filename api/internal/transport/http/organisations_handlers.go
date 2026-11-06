@@ -72,7 +72,7 @@ func (a *api) listOrganisations(c *gin.Context) {
 	if !ok {
 		return
 	}
-	p, err := a.Organisations.List(c.Request.Context(), s, c.Query("q"), c.Query("active"), after, limit)
+	p, err := a.Organisations.List(c.Request.Context(), s, c.Query("q"), c.Query("active"), c.Query("externalRef"), after, limit)
 	respond(c, http.StatusOK, page(p, toOrganisation), err)
 }
 

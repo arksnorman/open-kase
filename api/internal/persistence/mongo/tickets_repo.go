@@ -518,6 +518,9 @@ func (r *TicketsRepository) filter(ctx context.Context, q tickets.Query) (bson.D
 	if len(q.OrganisationIds) > 0 {
 		f = append(f, bson.E{Key: "organisationId", Value: bson.D{{Key: "$in", Value: oidList(q.OrganisationIds)}}})
 	}
+	if q.RequesterId != "" {
+		f = append(f, bson.E{Key: "requesterId", Value: mustOID(q.RequesterId)})
+	}
 	if len(q.RequestTypeIds) > 0 {
 		f = append(f, bson.E{Key: "requestTypeId", Value: bson.D{{Key: "$in", Value: oidList(q.RequestTypeIds)}}})
 	}
@@ -645,7 +648,7 @@ func (r *TicketsRepository) List(ctx context.Context, q tickets.Query) ([]ticket
 func unfiltered(q tickets.Query) bool {
 	return len(q.Categories) == 0 && q.AssigneeId == "" && !q.Unassigned && q.GroupIds == nil && q.WatchedBy == "" &&
 		q.GroupFilter == "" && q.Search == (tickets.Search{}) && len(q.Priorities) == 0 && len(q.StatusIds) == 0 &&
-		len(q.Tags) == 0 && len(q.RequestTypeIds) == 0 && len(q.OrganisationIds) == 0 && q.WarnBefore == nil && q.SLA == "" && !q.None
+		len(q.Tags) == 0 && len(q.RequestTypeIds) == 0 && len(q.OrganisationIds) == 0 && q.RequesterId == "" && q.WarnBefore == nil && q.SLA == "" && !q.None
 }
 
 // Count counts the tickets matching an authorized query.

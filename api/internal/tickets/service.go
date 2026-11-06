@@ -36,8 +36,8 @@ type Limits struct {
 // Requesters resolves ticket requesters (implemented by customers.Service).
 type Requesters interface {
 	RequesterByID(ctx context.Context, scope *access.ProjectScope, id string) (customers.Contact, error)
-	// OrganisationContact returns a project contact (contactNotInOrganisation
-	// style 422 when it does not exist); the caller checks its organisation.
+	// OrganisationContact returns a project contact (a contactNotInOrganisation
+	// 422 when it does not exist); the caller checks its organisation.
 	OrganisationContact(ctx context.Context, scope *access.ProjectScope, id string) (customers.Contact, error)
 	EnsureRequester(ctx context.Context, scope *access.ProjectScope, name, email string, externalID, organisationID *string) (customers.Contact, error)
 }
@@ -495,7 +495,13 @@ func (s *Service) create(ctx context.Context, scope *access.ProjectScope, in Cre
 		if in.Priority != nil {
 			t.Priority = *in.Priority
 		}
-		msg.Author = staffAuthor(p)
+		if p.IsUser() || scope.Can(access.CapTicketReplyPublic) {
+			msg.Author = staffAuthor(p)
+		} else {
+			// A staff token without tickets:comment does not speak as a
+			// bot: like its replies, the first message is the requester's.
+			msg.Author = Author{Kind: AuthorContact, Id: contact.Id, Name: contact.Name, ViaId: p.Id}
+		}
 	} else {
 		// The requester side may request a priority; the effective priority
 		// is set by support staff (architecture §3.1).
@@ -633,7 +639,7 @@ type ListInput struct {
 	GroupId string
 	After   *pagination.Cursor
 	Limit   int
-	// Filter narrows any view (list parameters; staff only).
+	// Filter narrows any view (list parameters; staff only, except statusId, organisationId and requesterId).
 	Filter *Filter
 }
 
@@ -713,8 +719,12 @@ func (s *Service) query(scope *access.ProjectScope, in ListInput) (Query, bool, 
 		q.Categories = []statuses.Category{statuses.CategoryArchived}
 	}
 	if in.Filter != nil {
-		if err := scope.Principal.RequireStaff(); err != nil {
-			return Query{}, false, err
+		// Requester-side tokens may narrow by status, organisation and
+		// requester only; every other filter is staff only.
+		if !in.Filter.requesterSide() {
+			if err := scope.Principal.RequireStaff(); err != nil {
+				return Query{}, false, err
+			}
 		}
 		if f := in.Filter; f.Assignee != "" && (in.View == "myWork" || in.View == "unassigned") {
 			return Query{}, false, fault.Field("assignee", "notAllowed", "This view already fixes the assignee.")
@@ -1261,12 +1271,21 @@ type TransitionInput struct {
 // Transition resolves, reopens, archives, puts on hold or sets a workable
 // status.
 // Archived tickets reject every transition with ticketArchived.
+//
+// A requester-side token holding tickets:replyAsRequester may resolve only
+// (the requester closing its own ticket); it sees no version, so
+// expectedVersion is ignored for it. Every other action is staff only.
 func (s *Service) Transition(ctx context.Context, scope *access.ProjectScope, ref string, expectedVersion int64, in TransitionInput) (Ticket, error) {
-	if err := scope.Principal.RequireStaff(); err != nil {
-		return Ticket{}, err
-	}
-	if err := scope.Require(access.CapTicketTransition); err != nil {
-		return Ticket{}, err
+	requesterResolve := false
+	if !scope.Principal.IsStaff() && in.Action == "resolve" && scope.Can(access.CapTicketReplyAsRequester) {
+		requesterResolve = true
+	} else {
+		if err := scope.Principal.RequireStaff(); err != nil {
+			return Ticket{}, err
+		}
+		if err := scope.Require(access.CapTicketTransition); err != nil {
+			return Ticket{}, err
+		}
 	}
 	var v validation.Collector
 	v.String(validation.TicketTransitionAction, "action", in.Action)
@@ -1303,6 +1322,9 @@ func (s *Service) Transition(ctx context.Context, scope *access.ProjectScope, re
 	}
 	if t.Archived() {
 		return Ticket{}, archivedErr(scope, t)
+	}
+	if requesterResolve {
+		expectedVersion = t.Version
 	}
 	if t.Version != expectedVersion {
 		return Ticket{}, errVersion()

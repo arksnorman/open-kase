@@ -137,9 +137,12 @@ type mutationArgs struct {
 // ---- Inputs ----
 
 type ticketsListIn struct {
-	View    string `json:"view,omitempty" jsonschema:"Queue/view. Users: myWork, unassigned, watching, awaitingCustomer, onHold, dueSoon, resolved, archived, all. API tokens: awaitingCustomer, onHold, resolved, archived, all."`
-	Q       string `json:"q,omitempty" jsonschema:"Search text: a ticket number (1042 or #1042) or words from the subject."`
-	GroupId string `json:"groupId,omitempty" jsonschema:"Only tickets currently in this group."`
+	View           string `json:"view,omitempty" jsonschema:"Queue/view. Users: myWork, unassigned, watching, awaitingCustomer, onHold, dueSoon, resolved, archived, all. API tokens: awaitingCustomer, onHold, resolved, archived, all."`
+	Q              string `json:"q,omitempty" jsonschema:"Search text: a ticket number (1042 or #1042) or words from the subject."`
+	GroupId        string `json:"groupId,omitempty" jsonschema:"Only tickets currently in this group."`
+	StatusId       string `json:"statusId,omitempty" jsonschema:"Comma-separated status IDs (also for requester-side tokens)."`
+	OrganisationId string `json:"organisationId,omitempty" jsonschema:"Comma-separated organisation IDs (also for requester-side tokens)."`
+	RequesterId    string `json:"requesterId,omitempty" jsonschema:"A contact ID: only that contact's tickets (also for requester-side tokens)."`
 	pageArgs
 }
 
@@ -246,7 +249,8 @@ type ticketsAssignIn struct {
 type noArgs struct{}
 
 type contactsListIn struct {
-	Q string `json:"q,omitempty" jsonschema:"Name or email prefix."`
+	Q          string `json:"q,omitempty" jsonschema:"Name or email prefix."`
+	ExternalId string `json:"externalId,omitempty" jsonschema:"Exact match on the contact's external ID (at most one contact)."`
 	pageArgs
 }
 
@@ -283,8 +287,9 @@ type contactsUpsertIn struct {
 }
 
 type organisationsListIn struct {
-	Q      string `json:"q,omitempty" jsonschema:"Search the organisation name or external reference (substring, case-insensitive)."`
-	Active string `json:"active,omitempty" jsonschema:"true (default), false or all."`
+	Q           string `json:"q,omitempty" jsonschema:"Search the organisation name or external reference (substring, case-insensitive)."`
+	Active      string `json:"active,omitempty" jsonschema:"true (default), false or all."`
+	ExternalRef string `json:"externalRef,omitempty" jsonschema:"Exact match on the external reference (at most one organisation; deactivated ones need active all)."`
 	pageArgs
 }
 
@@ -343,7 +348,7 @@ func (h *Handler) registerTools() {
 	addTool(h, &sdk.Tool{Name: ToolTicketsGet, Description: "Get one ticket and the messages the caller may read: public messages with tickets:read, agent notes as well for users and staff tokens with tickets:internal.",
 		Annotations: readOnly("Get ticket")}, func(s *jsonschema.Schema) { intRange(s, "messagesLimit", 1, 100) }, h.ticketsGet)
 
-	addTool(h, &sdk.Tool{Name: ToolTicketsCreate, Description: "Create a ticket with its first public message (tickets:create). It enters a group queue unassigned. organisationId optionally links the ticket to an organisation (never taken from the requester); ccEmails optionally copies addresses on every requester email. A staff token (holding tickets:comment, tickets:internal, tickets:write or tickets:all) writes the message as the bot; any other token writes it as the requester.",
+	addTool(h, &sdk.Tool{Name: ToolTicketsCreate, Description: "Create a ticket with its first public message (tickets:create). It enters a group queue unassigned. organisationId optionally links the ticket to an organisation (never taken from the requester); ccEmails optionally copies addresses on every requester email. A token holding tickets:comment (or tickets:all) writes the message as the bot; any other token writes it as the requester (staff tokens still set the priority).",
 		Annotations: mutating("Create ticket", false)}, func(s *jsonschema.Schema) { intRange(s, "priority", 1, 4) }, h.ticketsCreate)
 
 	addTool(h, &sdk.Tool{Name: ToolTicketsFollowUp, Description: "Create a new ticket linked as a follow-up to an existing one, e.g. an archived ticket that cannot change any more (tickets:create and tickets:read). Copies subject, requester, request type and group only.",
@@ -367,7 +372,7 @@ func (h *Handler) registerTools() {
 	addTool(h, &sdk.Tool{Name: ToolTicketsUpdate, Description: "Change priority, tags, request type, the requester organisation or the CC addresses (users, and staff tokens with tickets:write). Only given fields change.",
 		Annotations: mutating("Update ticket", true)}, func(s *jsonschema.Schema) { intRange(s, "priority", 1, 4) }, h.ticketsUpdate)
 
-	addTool(h, &sdk.Tool{Name: ToolTicketsTransition, Description: "Resolve, reopen, archive (final), put on hold (needs a holdReasonsList ID; the ticket returns to Open after the reason's maxDays) or set an open or awaiting-customer status (users, and staff tokens with tickets:write).",
+	addTool(h, &sdk.Tool{Name: ToolTicketsTransition, Description: "Resolve, reopen, archive (final), put on hold (needs a holdReasonsList ID; the ticket returns to Open after the reason's maxDays) or set an open or awaiting-customer status (users, and staff tokens with tickets:write). A requester-side token with tickets:replyAsRequester may resolve only (no expectedVersion needed); everything else is staff only.",
 		Annotations: mutating("Change status", false)}, func(s *jsonschema.Schema) {
 		enum(s, "action", validation.TicketTransitionAction.Choices...)
 	}, h.ticketsTransition)
@@ -442,7 +447,25 @@ func (h *Handler) list(ctx context.Context, c *call, in tickets.ListInput, pg pa
 }
 
 func (h *Handler) ticketsList(ctx context.Context, c *call, in ticketsListIn) (any, error) {
-	return h.list(ctx, c, tickets.ListInput{View: in.View, Q: in.Q, GroupId: in.GroupId}, in.pageArgs)
+	var f tickets.Filter
+	f.StatusIds, f.OrganisationIds, f.RequesterId = splitIds(in.StatusId), splitIds(in.OrganisationId), strings.TrimSpace(in.RequesterId)
+	li := tickets.ListInput{View: in.View, Q: in.Q, GroupId: in.GroupId}
+	if !f.Empty() {
+		li.Filter = &f
+	}
+	return h.list(ctx, c, li, in.pageArgs)
+}
+
+// splitIds parses a comma-separated ID list.
+func splitIds(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	for i := range parts {
+		parts[i] = strings.TrimSpace(parts[i])
+	}
+	return parts
 }
 
 // ticketsSearch uses the audience-scoped full-text engine (the REST
@@ -755,7 +778,7 @@ func (h *Handler) contactsList(ctx context.Context, c *call, in contactsListIn) 
 	if err != nil {
 		return nil, err
 	}
-	p, err := h.d.Customers.ListContacts(ctx, s, in.Q, after, limit)
+	p, err := h.d.Customers.ListContacts(ctx, s, in.Q, in.ExternalId, after, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -910,7 +933,7 @@ func (h *Handler) organisationsList(ctx context.Context, c *call, in organisatio
 	if err != nil {
 		return nil, err
 	}
-	p, err := h.d.Organisations.List(ctx, s, in.Q, in.Active, after, limit)
+	p, err := h.d.Organisations.List(ctx, s, in.Q, in.Active, in.ExternalRef, after, limit)
 	if err != nil {
 		return nil, err
 	}

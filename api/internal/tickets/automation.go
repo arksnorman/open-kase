@@ -11,8 +11,9 @@ import (
 	"github.com/arksnorman/open-kase/api/internal/statuses"
 )
 
-// OutboxFollowupReminder asks the requester for a reply (email to the
-// requester contact; no staff notification, no webhook).
+// OutboxFollowupReminder asks the requester for a reply: an email to the
+// requester contact (skipped when requester emails are off) and a
+// ticket.followupReminder webhook; no staff notification.
 const OutboxFollowupReminder = outbox.TicketFollowupReminder
 
 // ReminderMarkAutoResolve is recorded in a reminder event's changes when

@@ -188,8 +188,8 @@ func (a *api) getSettings(c *gin.Context) {
 // putSettingsRequest is the request body of putSettings.
 // putNotificationsRequest: requesterEmails is optional (absent keeps the stored value).
 type putNotificationsRequest struct {
-	RequesterLinkBaseURL string `json:"requesterLinkBaseUrl" doc:"See the settings document."`
-	RequesterEmails      *bool  `json:"requesterEmails" doc:"Email contacts and CC addresses; absent keeps the stored value."`
+	RequesterLinkBaseURL *string `json:"requesterLinkBaseUrl" doc:"See the settings document. Absent keeps the stored value."`
+	RequesterEmails      *bool   `json:"requesterEmails" doc:"Email contacts and CC addresses; absent keeps the stored value."`
 }
 
 type putSettingsRequest struct {
@@ -208,7 +208,7 @@ type putSettingsRequest struct {
 		CACertificate string  `json:"caCertificate" doc:"Optional PEM certificate bundle trusted in addition to the system roots, for a relay with a self-signed or private CA. Ignored when tlsMode is none."`
 		TLSSkipVerify bool    `json:"tlsSkipVerify" doc:"Skip server certificate verification. Not recommended: anyone between this server and the relay can read or change mail and see the SMTP password. Ignored when tlsMode is none."`
 	} `json:"smtp"`
-	// Notifications is optional: absent keeps the stored requester link.
+	// Notifications is optional: absent keeps the stored requester link and email switch.
 	Notifications *putNotificationsRequest `json:"notifications"`
 	// UpdatedAt is read-only; accepted (and ignored) so a document read
 	// with GET can be sent back.
@@ -252,7 +252,9 @@ func (a *api) putSettings(c *gin.Context) {
 				s.Product.Description = strings.TrimSpace(*body.Product.Description)
 			}
 			if body.Notifications != nil {
-				s.Notifications.RequesterLinkBaseURL = body.Notifications.RequesterLinkBaseURL
+				if body.Notifications.RequesterLinkBaseURL != nil {
+					s.Notifications.RequesterLinkBaseURL = *body.Notifications.RequesterLinkBaseURL
+				}
 				if body.Notifications.RequesterEmails != nil {
 					s.Notifications.RequesterEmailsOff = !*body.Notifications.RequesterEmails
 				}
@@ -578,7 +580,7 @@ func (a *api) listContacts(c *gin.Context) {
 	if !ok {
 		return
 	}
-	p, err := a.Customers.ListContacts(c.Request.Context(), s, c.Query("q"), after, limit)
+	p, err := a.Customers.ListContacts(c.Request.Context(), s, c.Query("q"), c.Query("externalId"), after, limit)
 	respond(c, http.StatusOK, page(p, toContact), err)
 }
 

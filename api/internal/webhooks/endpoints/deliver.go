@@ -233,7 +233,10 @@ type messageDTO struct {
 	Visibility string `json:"visibility"`
 	Author     struct {
 		Context string `json:"context"`
-		Name    string `json:"name"`
+		// Id is the contact's ID for a contact author (the requester or a
+		// teammate replying through contactId); staff and bots have none.
+		Id   string `json:"id,omitempty"`
+		Name string `json:"name"`
 	} `json:"author"`
 	Body        string          `json:"body"`
 	Attachments []attachmentDTO `json:"attachments"`
@@ -331,6 +334,9 @@ func (w *Deliverer) build(ctx context.Context, ep Endpoint, typ, eventID string)
 		}
 		md := messageDTO{Id: m.Id, Visibility: m.Visibility, Body: m.Body, CreatedAt: m.CreatedAt, Attachments: []attachmentDTO{}}
 		md.Author.Context, md.Author.Name = m.Author.Context(), m.Author.Name
+		if m.Author.Kind == tickets.AuthorContact {
+			md.Author.Id = m.Author.Id
+		}
 		for _, a := range m.Attachments {
 			if a.Removed() {
 				md.Attachments = append(md.Attachments, attachmentDTO{Id: a.Id, Removed: true})

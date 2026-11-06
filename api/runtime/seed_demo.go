@@ -349,7 +349,7 @@ func (s *seeder) seedProject(ctx context.Context, sp seedProject, adminID string
 
 	// Organisations, then contacts linked to them.
 	s.orgs = map[string]string{}
-	existing, err := s.c.Organisations.List(ctx, scope, "", "all", nil, 100)
+	existing, err := s.c.Organisations.List(ctx, scope, "", "all", "", nil, 100)
 	if err != nil {
 		return err
 	}

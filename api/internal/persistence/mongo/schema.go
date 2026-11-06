@@ -272,6 +272,7 @@ func schemaSpecs() []collectionSpec {
 			}),
 			indexes: []mongo.IndexModel{
 				idx(bson.D{{Key: "projectId", Value: 1}, {Key: "organisationId", Value: 1}}, "projectOrganisation", false),
+				idx(bson.D{{Key: "projectId", Value: 1}, {Key: "requesterId", Value: 1}, {Key: "updatedAt", Value: -1}, {Key: "_id", Value: -1}}, "projectRequester", false),
 				idx(bson.D{{Key: "projectId", Value: 1}, {Key: "emailNormalized", Value: 1}}, "projectEmailUnique", true),
 				{Keys: bson.D{{Key: "projectId", Value: 1}, {Key: "externalId", Value: 1}}, Options: options.Index().SetName("projectExternalIdUnique").SetUnique(true).SetPartialFilterExpression(bson.D{{Key: "externalId", Value: bson.D{{Key: "$type", Value: "string"}}}})},
 			},

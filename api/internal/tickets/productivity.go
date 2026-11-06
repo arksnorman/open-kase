@@ -162,7 +162,15 @@ type Filter struct {
 	Tags            []string // tickets carrying every tag
 	RequestTypeIds  []string
 	OrganisationIds []string
+	RequesterId     string // a contact ID: that contact's tickets
 	Due             string // "", "dueSoon", "breached", "met", "missed" or "running"
+}
+
+// requesterSide reports whether the filter uses only the parameters that
+// requester-side tokens may send (statusId, organisationId, requesterId);
+// they only narrow what the token can already read.
+func (f Filter) requesterSide() bool {
+	return f.Assignee == "" && len(f.Priorities) == 0 && len(f.Tags) == 0 && len(f.RequestTypeIds) == 0 && f.Due == ""
 }
 
 // MaxFilterValues bounds each filter list.
@@ -171,7 +179,7 @@ const MaxFilterValues = 20
 // Empty reports whether the filter selects everything.
 func (f Filter) Empty() bool {
 	return f.Assignee == "" && len(f.Priorities) == 0 && len(f.StatusIds) == 0 &&
-		len(f.Tags) == 0 && len(f.RequestTypeIds) == 0 && len(f.OrganisationIds) == 0 && f.Due == ""
+		len(f.Tags) == 0 && len(f.RequestTypeIds) == 0 && len(f.OrganisationIds) == 0 && f.RequesterId == "" && f.Due == ""
 }
 
 // Normalize validates the filter and normalizes its tags.
@@ -191,6 +199,9 @@ func (f *Filter) Normalize(v *validation.Collector) {
 	ids("statusIds", f.StatusIds)
 	ids("requestTypeIds", f.RequestTypeIds)
 	ids("organisationIds", f.OrganisationIds)
+	if f.RequesterId != "" {
+		v.String(validation.ObjectID, prefix+"requesterId", f.RequesterId)
+	}
 	if f.Assignee != "" {
 		v.String(validation.ViewAssignee, prefix+"assignee", f.Assignee)
 	}
@@ -222,6 +233,7 @@ func (f Filter) apply(q *Query, me string, now time.Time) {
 	q.Tags = slices.Clone(f.Tags)
 	q.RequestTypeIds = slices.Clone(f.RequestTypeIds)
 	q.OrganisationIds = slices.Clone(f.OrganisationIds)
+	q.RequesterId = f.RequesterId
 	q.SLA, q.Now = f.Due, now
 }
 

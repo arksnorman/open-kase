@@ -71,7 +71,7 @@ const ERROR_CLASSES: Record<string, string> = {
   recipientInactive: 'The recipient account is not active.',
   mutedByPreference: 'The recipient muted this kind of email.',
   noLongerRequester: 'The contact is no longer the ticket requester.',
-  requesterEmailsOff: 'Requester emails are turned off (Settings, Configuration, Email). Use webhooks to notify requesters.',
+  requesterEmailsOff: 'Requester emails are turned off (Settings, Configuration, General, Email contacts and CC addresses). Use webhooks to notify requesters.',
   noLongerCc: 'The address was removed from the ticket’s CC list before sending.',
   ticketUnavailable: 'The ticket was deleted or is unavailable.',
   baseUrlNotConfigured: 'No base URL is set (Settings, Configuration, General), so links cannot be built.',
