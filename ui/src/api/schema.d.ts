@@ -2894,6 +2894,12 @@ export interface components {
             baseLastPublicId?: string | null;
             body?: string;
         };
+        PutNotificationsRequest: {
+            /** @description Email contacts and CC addresses; absent keeps the stored value. */
+            requesterEmails?: boolean | null;
+            /** @description See the settings document. */
+            requesterLinkBaseUrl?: string;
+        };
         PutPreferencesRequest: {
             emailPreferences?: {
                 queueUpdates?: boolean | null;
@@ -2929,7 +2935,7 @@ export interface components {
         PutSettingsRequest: {
             auth?: components["schemas"]["SettingsAuthRequest"];
             files?: components["schemas"]["SettingsFilesRequest"];
-            notifications?: components["schemas"]["SettingsNotificationsRequest"] | null;
+            notifications?: components["schemas"]["PutNotificationsRequest"] | null;
             product?: components["schemas"]["SettingsProductRequest"];
             smtp?: {
                 /** @description Optional PEM certificate bundle trusted in addition to the system roots, for a relay with a self-signed or private CA. Ignored when tlsMode is none. */
@@ -3263,12 +3269,10 @@ export interface components {
             maxMessageTotalBytes?: number;
         };
         SettingsNotifications: {
+            /** @description Email contacts and CC addresses (default true). When false, no email goes to contacts or CC addresses (ticket received, replies, status notices, follow-up reminders; each is recorded as a skipped delivery with class requesterEmailsOff); staff emails are unchanged. Use webhooks to notify requesters instead. */
+            requesterEmails: boolean;
             /** @description Absolute http(s) base URL of the system that submits tickets. Requester emails link to {requesterLinkBaseUrl}/{ticket number} and never include message content or a link to this application. Empty: no link; the email asks the requester to check the system they used. */
             requesterLinkBaseUrl: string;
-        };
-        SettingsNotificationsRequest: {
-            /** @description Absolute http(s) base URL of the system that submits tickets. Requester emails link to {requesterLinkBaseUrl}/{ticket number} and never include message content or a link to this application. Empty: no link; the email asks the requester to check the system they used. */
-            requesterLinkBaseUrl?: string;
         };
         SettingsProduct: {
             baseUrl: string;

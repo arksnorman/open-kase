@@ -29,7 +29,14 @@ type NotificationSettings struct {
 	// (never the agent UI). Empty: requester emails carry no link and ask
 	// the requester to check the system they used.
 	RequesterLinkBaseURL string
+	// RequesterEmailsOff stops all email to contacts and CC addresses
+	// (stored inverted so the zero value keeps the default: on). Staff
+	// emails are unaffected. Use RequesterEmailsEnabled.
+	RequesterEmailsOff bool
 }
+
+// RequesterEmailsEnabled reports whether contacts and CC addresses are emailed.
+func (n NotificationSettings) RequesterEmailsEnabled() bool { return !n.RequesterEmailsOff }
 
 // RequesterTicketURL returns the requester link for a ticket number
 // (<base>/<number>), or "" when no requester link base URL is configured.
@@ -229,5 +236,6 @@ func Diff(a, b Settings) []string {
 	add(a.SMTP.CACertificate != b.SMTP.CACertificate, "smtp.caCertificate")
 	add(a.SMTP.TLSSkipVerify != b.SMTP.TLSSkipVerify, "smtp.tlsSkipVerify")
 	add(a.Notifications.RequesterLinkBaseURL != b.Notifications.RequesterLinkBaseURL, "notifications.requesterLinkBaseUrl")
+	add(a.Notifications.RequesterEmailsOff != b.Notifications.RequesterEmailsOff, "notifications.requesterEmails")
 	return out
 }

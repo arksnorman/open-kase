@@ -285,6 +285,12 @@ func (e *Email) buildNotification(ctx context.Context, j jobs.Job, d Delivery, s
 	}
 	recipientKey := j.Payload["recipientKind"] + "-" + j.Payload["recipientId"]
 	switch j.Payload["recipientKind"] {
+	case RecipientAddress, RecipientContact:
+		if !snap.Notifications().RequesterEmailsEnabled() {
+			return mailer.Message{}, skipped("requesterEmailsOff")
+		}
+	}
+	switch j.Payload["recipientKind"] {
 	case RecipientAddress:
 		// A CC address of the ticket: exactly the requester's email (same
 		// template, no message content), while it is still on the CC list.

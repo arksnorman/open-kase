@@ -101,6 +101,7 @@ type settingsDataDoc struct {
 	} `bson:"smtp"`
 	Notifications struct {
 		RequesterLinkBaseURL string `bson:"requesterLinkBaseUrl,omitempty"`
+		RequesterEmailsOff   bool   `bson:"requesterEmailsOff,omitempty"`
 	} `bson:"notifications,omitempty"`
 }
 
@@ -129,6 +130,7 @@ func toSettingsData(s settings.Settings) settingsDataDoc {
 	d.SMTP.FromAddress, d.SMTP.FromName, d.SMTP.TLSMode = s.SMTP.FromAddress, s.SMTP.FromName, s.SMTP.TLSMode
 	d.SMTP.CACertificate, d.SMTP.TLSSkipVerify = s.SMTP.CACertificate, s.SMTP.TLSSkipVerify
 	d.Notifications.RequesterLinkBaseURL = s.Notifications.RequesterLinkBaseURL
+	d.Notifications.RequesterEmailsOff = s.Notifications.RequesterEmailsOff
 	return d
 }
 
@@ -148,5 +150,6 @@ func (d settingsDataDoc) toDomain() settings.Settings {
 		CACertificate: d.SMTP.CACertificate, TLSSkipVerify: d.SMTP.TLSSkipVerify,
 	}
 	s.Notifications.RequesterLinkBaseURL = d.Notifications.RequesterLinkBaseURL
+	s.Notifications.RequesterEmailsOff = d.Notifications.RequesterEmailsOff
 	return s
 }

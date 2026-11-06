@@ -10,6 +10,7 @@ const EVENTS: Record<string, { name: string; short: string }> = {
   'ticket.statusChanged': { name: 'Status changed', short: 'Status' },
   'ticket.slaWarning': { name: 'SLA due soon', short: 'SLA due soon' },
   'ticket.slaBreached': { name: 'SLA breached', short: 'SLA breached' },
+  'ticket.followupReminder': { name: 'Follow-up reminder', short: 'Reminder' },
   'webhook.test': { name: 'Test', short: 'Test' },
 }
 

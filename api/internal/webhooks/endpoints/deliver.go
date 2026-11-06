@@ -290,15 +290,10 @@ func (w *Deliverer) build(ctx context.Context, ep Endpoint, typ, eventID string)
 
 	switch typ {
 	case webhooks.TypeTicketCreated:
-		var ext *string
-		if t.Requester.ExternalId != "" {
-			ext = &t.Requester.ExternalId
-		}
-		data["subject"], data["priority"], data["status"], data["group"] = snap.Subject, snap.Priority, status, group
+		data["priority"], data["status"], data["group"] = snap.Priority, status, group
 		data["source"] = t.Source
 		data["requestType"] = refDTO{Id: t.RequestType.Id, Name: t.RequestType.Name}
-		data["requester"] = requesterDTO{Id: t.Requester.Id, Name: t.Requester.Name, Email: t.Requester.Email, ExternalId: ext}
-		if data["organisation"], err = w.organisationPayload(ctx, t, snap); err != nil {
+		if err := w.addRequesterContext(ctx, data, t, snap); err != nil {
 			return nil, err
 		}
 		if t.RequestedPriority > 0 {
@@ -344,6 +339,11 @@ func (w *Deliverer) build(ctx context.Context, ep Endpoint, typ, eventID string)
 			md.Attachments = append(md.Attachments, attachmentDTO{Id: a.Id, Filename: a.Filename, Size: a.Size, ContentType: a.ContentType})
 		}
 		data["message"] = md
+		if typ == webhooks.TypeMessagePublic {
+			if err := w.addRequesterContext(ctx, data, t, snap); err != nil {
+				return nil, err
+			}
+		}
 	case webhooks.TypeTicketAssigned:
 		data["group"] = group
 		if staff {
@@ -359,6 +359,14 @@ func (w *Deliverer) build(ctx context.Context, ep Endpoint, typ, eventID string)
 		}
 	case webhooks.TypeTicketStatusChanged:
 		data["status"], data["transition"] = status, ev.Transition
+		if err := w.addRequesterContext(ctx, data, t, snap); err != nil {
+			return nil, err
+		}
+	case webhooks.TypeFollowupReminder:
+		data["autoResolveNotice"] = slices.Contains(ev.Changes, tickets.ReminderMarkAutoResolve)
+		if err := w.addRequesterContext(ctx, data, t, snap); err != nil {
+			return nil, err
+		}
 	case webhooks.TypeSLAWarning, webhooks.TypeSLABreached:
 		sl := map[string]any{"kind": ev.SLAKind, "state": "dueSoon"}
 		if typ == webhooks.TypeSLABreached {
@@ -375,6 +383,28 @@ func (w *Deliverer) build(ctx context.Context, ep Endpoint, typ, eventID string)
 	}
 	env.Data = raw
 	return env.Marshal()
+}
+
+// addRequesterContext adds the fields every requester-facing event shares
+// (never agent-note content): subject, requester, organisation and ccEmails.
+func (w *Deliverer) addRequesterContext(ctx context.Context, data map[string]any, t tickets.Ticket, snap outbox.Snapshot) error {
+	var ext *string
+	if t.Requester.ExternalId != "" {
+		ext = &t.Requester.ExternalId
+	}
+	data["subject"] = snap.Subject
+	data["requester"] = requesterDTO{Id: t.Requester.Id, Name: t.Requester.Name, Email: t.Requester.Email, ExternalId: ext}
+	cc := t.CCEmails
+	if cc == nil {
+		cc = []string{}
+	}
+	data["ccEmails"] = cc
+	org, err := w.organisationPayload(ctx, t, snap)
+	if err != nil {
+		return err
+	}
+	data["organisation"] = org
+	return nil
 }
 
 // optString is nil for "" (JSON null) and the value otherwise.

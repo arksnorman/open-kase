@@ -186,6 +186,12 @@ func (a *api) getSettings(c *gin.Context) {
 }
 
 // putSettingsRequest is the request body of putSettings.
+// putNotificationsRequest: requesterEmails is optional (absent keeps the stored value).
+type putNotificationsRequest struct {
+	RequesterLinkBaseURL string `json:"requesterLinkBaseUrl" doc:"See the settings document."`
+	RequesterEmails      *bool  `json:"requesterEmails" doc:"Email contacts and CC addresses; absent keeps the stored value."`
+}
+
 type putSettingsRequest struct {
 	Product settingsProductRequest `json:"product"`
 	Auth    settingsAuthRequest    `json:"auth"`
@@ -203,7 +209,7 @@ type putSettingsRequest struct {
 		TLSSkipVerify bool    `json:"tlsSkipVerify" doc:"Skip server certificate verification. Not recommended: anyone between this server and the relay can read or change mail and see the SMTP password. Ignored when tlsMode is none."`
 	} `json:"smtp"`
 	// Notifications is optional: absent keeps the stored requester link.
-	Notifications *settingsNotificationsDTO `json:"notifications"`
+	Notifications *putNotificationsRequest `json:"notifications"`
 	// UpdatedAt is read-only; accepted (and ignored) so a document read
 	// with GET can be sent back.
 	UpdatedAt *time.Time `json:"updatedAt" doc:"Read-only; ignored."`
@@ -247,6 +253,9 @@ func (a *api) putSettings(c *gin.Context) {
 			}
 			if body.Notifications != nil {
 				s.Notifications.RequesterLinkBaseURL = body.Notifications.RequesterLinkBaseURL
+				if body.Notifications.RequesterEmails != nil {
+					s.Notifications.RequesterEmailsOff = !*body.Notifications.RequesterEmails
+				}
 			}
 			s.Auth.RequireAdminMFA = mfa
 			if body.Auth.RequireAdminMFA != nil {
