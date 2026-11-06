@@ -201,6 +201,21 @@ func (s *Service) RequesterByID(ctx context.Context, scope *access.ProjectScope,
 	return c, err
 }
 
+// OrganisationContact returns a project contact for a reply posted on behalf
+// of a teammate of the requester. The caller has already been authorised to
+// reply as the requester and checks the contact's organisation.
+func (s *Service) OrganisationContact(ctx context.Context, scope *access.ProjectScope, id string) (Contact, error) {
+	notFound := fault.Field("contactId", "notFound", "No contact with this ID exists in the project.")
+	if !validation.ValidID(id) {
+		return Contact{}, notFound
+	}
+	c, err := s.repo.GetContact(ctx, scope.Project.Id, id)
+	if errors.Is(err, ErrNotFound) {
+		return Contact{}, notFound
+	}
+	return c, err
+}
+
 // EnsureRequester resolves the requester of a new ticket. Callers with
 // contact.write upsert the contact (name changes are applied); callers
 // with only ticket.create reuse a matching contact unchanged or create a

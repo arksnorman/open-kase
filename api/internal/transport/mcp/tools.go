@@ -212,6 +212,7 @@ type ticketsReplyIn struct {
 	ThenStatusId         string `json:"thenStatusId,omitempty" jsonschema:"Optional status to set in the same transaction (Resolved, or an open or awaiting-customer status ID from statusesList). Needs tickets:write (staff tokens) or a user; an invalid transition fails the call and nothing is posted."`
 	AddSignature         *bool  `json:"addSignature,omitempty" jsonschema:"Signed-in users only (default true): false skips the user's signature and the workspace signature. Tokens never add one."`
 	As                   string `json:"as,omitempty" jsonschema:"Tokens only: who authors the reply. staff: the token as a bot under its name (tickets:comment). requester: the ticket's requester (tickets:replyAsRequester; no thenStatusId). Omitted: staff when the token holds tickets:comment, otherwise requester."`
+	ContactId            string `json:"contactId,omitempty" jsonschema:"Only with as requester: author the reply as this contact of the ticket's organisation instead of the requester (422 contactNotInOrganisation when the contact is not in the ticket's organisation)."`
 	mutationArgs
 }
 
@@ -621,7 +622,7 @@ func (h *Handler) ticketsClaim(ctx context.Context, c *call, in ticketsClaimIn) 
 // post adds a message with an explicit audience. expectedVersion, when
 // given, is checked against the ticket just read; expectedLastPublicId
 // is the service's atomic stale-reply guard.
-func (h *Handler) post(ctx context.Context, c *call, tool, ref, audience, as, body, lastPublic, thenStatus string, noSignature bool, m mutationArgs, args any) (any, error) {
+func (h *Handler) post(ctx context.Context, c *call, tool, ref, audience, as, body, lastPublic, thenStatus string, noSignature bool, contactId string, m mutationArgs, args any) (any, error) {
 	s, t, err := h.ticketScope(ctx, c, ref)
 	if err != nil {
 		return nil, err
@@ -631,7 +632,7 @@ func (h *Handler) post(ctx context.Context, c *call, tool, ref, audience, as, bo
 	}
 	return h.idempotent(ctx, c, tool, m.IdempotencyKey, args, h.recheckTicket(c, ref), func(ctx context.Context) (any, error) {
 		res, err := h.d.Tickets.PostMessage(ctx, s, t.Id, tickets.PostInput{Visibility: audience, Body: body, ExpectedLastPublicId: optional(lastPublic),
-			ThenStatusId: optional(thenStatus), As: as, NoSignature: noSignature})
+			ThenStatusId: optional(thenStatus), As: as, ContactId: contactId, NoSignature: noSignature})
 		if err != nil {
 			return nil, err
 		}
@@ -643,7 +644,7 @@ func (h *Handler) ticketsReply(ctx context.Context, c *call, in ticketsReplyIn) 
 	if in.Audience != tickets.VisibilityPublic {
 		return nil, fault.Field("audience", "audienceRequired", "Set audience to \"public\" to reply to the requester.")
 	}
-	return h.post(ctx, c, ToolTicketsReply, in.Ticket, tickets.VisibilityPublic, in.As, in.Body, in.ExpectedLastPublicId, in.ThenStatusId, in.AddSignature != nil && !*in.AddSignature, in.mutationArgs, in)
+	return h.post(ctx, c, ToolTicketsReply, in.Ticket, tickets.VisibilityPublic, in.As, in.Body, in.ExpectedLastPublicId, in.ThenStatusId, in.AddSignature != nil && !*in.AddSignature, in.ContactId, in.mutationArgs, in)
 }
 
 func (h *Handler) ticketsAddNote(ctx context.Context, c *call, in ticketsAddNoteIn) (any, error) {
@@ -652,7 +653,7 @@ func (h *Handler) ticketsAddNote(ctx context.Context, c *call, in ticketsAddNote
 	if in.Audience != tickets.VisibilityAgent {
 		return nil, fault.Field("audience", "audienceRequired", "Set audience to \"agent\" for a staff-only note.")
 	}
-	return h.post(ctx, c, ToolTicketsAddNote, in.Ticket, tickets.VisibilityAgent, "", in.Body, "", in.ThenStatusId, false, in.mutationArgs, in)
+	return h.post(ctx, c, ToolTicketsAddNote, in.Ticket, tickets.VisibilityAgent, "", in.Body, "", in.ThenStatusId, false, "", in.mutationArgs, in)
 }
 
 func (h *Handler) ticketsUpdate(ctx context.Context, c *call, in ticketsUpdateIn) (any, error) {

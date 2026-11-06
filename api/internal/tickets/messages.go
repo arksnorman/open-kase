@@ -148,6 +148,9 @@ type PostInput struct {
 	// NoSignature skips the author's signatures on a staff user's public
 	// reply (REST: addSignature=false). The default appends them.
 	NoSignature bool
+	// ContactId authors an As=requester reply as another contact of the
+	// ticket's organisation instead of the requester. Empty: the requester.
+	ContactId string
 
 	// scheduledID is set when a scheduled message is being sent: its
 	// reserved attachments are accepted, idempotency replay and draft
@@ -215,6 +218,9 @@ func (in PostInput) collect(s *Service, v *validation.Collector) {
 	if in.ThenStatusId != nil {
 		v.String(validation.ObjectID, "thenStatusId", *in.ThenStatusId)
 	}
+	if in.ContactId != "" {
+		v.String(validation.ObjectID, "contactId", in.ContactId)
+	}
 }
 
 // requirePost resolves the author (resolveAs) and, with thenStatusId,
@@ -222,6 +228,9 @@ func (in PostInput) collect(s *Service, v *validation.Collector) {
 func requirePost(scope *access.ProjectScope, in PostInput) (asRequester bool, err error) {
 	if asRequester, err = resolveAs(scope, in); err != nil {
 		return false, err
+	}
+	if in.ContactId != "" && !asRequester {
+		return false, fault.Field("contactId", "notAllowed", "contactId is only valid for a reply posted as the requester.")
 	}
 	if in.ThenStatusId != nil {
 		return false, scope.Require(access.CapTicketTransition)
@@ -345,6 +354,16 @@ func (s *Service) postMessage(ctx context.Context, scope *access.ProjectScope, r
 			}
 		} else {
 			msg.Author = Author{Kind: AuthorContact, Id: t.Requester.Id, Name: t.Requester.Name, ViaId: p.Id}
+			if in.ContactId != "" && in.ContactId != t.Requester.Id {
+				c, err := s.requesters.OrganisationContact(ctx, scope, in.ContactId)
+				if err != nil {
+					return PostResult{}, err
+				}
+				if t.Organisation == nil || c.OrganisationId != t.Organisation.Id {
+					return PostResult{}, errContactNotInOrganisation()
+				}
+				msg.Author.Id, msg.Author.Name = c.Id, c.Name
+			}
 			eligible := false
 			if t.Assignee != nil {
 				if eligible, err = s.repo.IsEligible(ctx, scope.Project.Id, t.Group.Id, t.Assignee.Id); err != nil {
@@ -487,4 +506,8 @@ func (s *Service) DeleteDraft(ctx context.Context, scope *access.ProjectScope, r
 		return err
 	}
 	return s.repo.DeleteDraft(ctx, t.Id, scope.Principal.Id, visibility)
+}
+
+func errContactNotInOrganisation() error {
+	return fault.Field("contactId", "contactNotInOrganisation", "The contact must belong to the ticket's organisation.")
 }

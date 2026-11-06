@@ -36,6 +36,9 @@ type Limits struct {
 // Requesters resolves ticket requesters (implemented by customers.Service).
 type Requesters interface {
 	RequesterByID(ctx context.Context, scope *access.ProjectScope, id string) (customers.Contact, error)
+	// OrganisationContact returns a project contact (contactNotInOrganisation
+	// style 422 when it does not exist); the caller checks its organisation.
+	OrganisationContact(ctx context.Context, scope *access.ProjectScope, id string) (customers.Contact, error)
 	EnsureRequester(ctx context.Context, scope *access.ProjectScope, name, email string, externalID, organisationID *string) (customers.Contact, error)
 }
 

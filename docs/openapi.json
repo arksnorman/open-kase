@@ -2506,6 +2506,10 @@
             "description": "Markdown source; rendered without raw HTML.",
             "type": "string"
           },
+          "contactId": {
+            "description": "Only with as=requester: author the reply as this contact instead of the requester. The contact must belong to the ticket's organisation (contactNotInOrganisation otherwise; the ticket needs an organisation). The reply behaves like any requester reply. Omitted or the requester's own ID: the requester.",
+            "type": "string"
+          },
           "expectedLastPublicId": {
             "type": [
               "string",
