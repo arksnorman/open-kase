@@ -1,9 +1,14 @@
 package runtime
 
 import (
+	"context"
+	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // firstAuthor returns the author of the oldest message of a ticket.
@@ -152,6 +157,23 @@ func TestExactExternalLookups(t *testing.T) {
 	if n := len(f.do("GET", "/api/v1/organisations?externalRef=nope", nil, bearer(tok)).expect(200).Items()); n != 0 {
 		t.Fatalf("unknown ref matched %d", n)
 	}
+	// Combined with q it narrows further; whitespace around the ref is trimmed.
+	one("/api/v1/contacts?externalId=acct-1&q=ann", c1)
+	if n := len(f.do("GET", "/api/v1/contacts?externalId=acct-1&q=ben", nil, bearer(tok)).expect(200).Items()); n != 0 {
+		t.Fatalf("q did not narrow: %d", n)
+	}
+	one("/api/v1/organisations?externalRef=%20acct-1%20", o1)
+	// A deactivated organisation only shows with active=all.
+	org := f.do("GET", "/api/v1/organisations/"+o10, nil, bearer(f.admin.Access)).expect(200)
+	f.do("PATCH", "/api/v1/organisations/"+o10, map[string]any{"active": false}, bearer(f.admin.Access), ifMatchV(org.Version())).expect(200)
+	if n := len(f.do("GET", "/api/v1/organisations?externalRef=acct-10", nil, bearer(tok)).expect(200).Items()); n != 0 {
+		t.Fatalf("inactive organisation listed by default: %d", n)
+	}
+	one("/api/v1/organisations?externalRef=acct-10&active=all", o10)
+	// Without the read scopes the lookups are refused.
+	_, none := f.token("No reads", "tickets:read")
+	f.do("GET", "/api/v1/contacts?externalId=acct-1", nil, bearer(none)).expect(403)
+	f.do("GET", "/api/v1/organisations?externalRef=acct-1", nil, bearer(none)).expect(403)
 }
 
 func TestWebhookTeammateAuthorIdAndOrganisationValues(t *testing.T) {
@@ -162,9 +184,18 @@ func TestWebhookTeammateAuthorIdAndOrganisationValues(t *testing.T) {
 	acme := f.createOrg(f.admin.Access, "Acme Ltd", "CUST-0042")["id"].(string)
 	priya := f.contact("Priya Raman", "priya@acme.example", acme, "crm-1042")
 	sam := f.contact("Sam Teammate", "sam@acme.example", acme, "crm-2000")
-	_, tok := f.token("Portal", "tickets:read", "tickets:replyAsRequester")
+	tokID, tok := f.token("Portal", "tickets:read", "tickets:replyAsRequester")
 	key := f.createTicket(f.integration, map[string]any{"organisationId": acme, "requester": map[string]any{"contactId": priya}}).Ref()
 	f.do("POST", tpath(key, "/messages"), map[string]any{"visibility": "public", "body": "From Sam", "as": "requester", "contactId": sam}, bearer(tok)).expect(201)
+	var sawAudit bool
+	for _, ev := range f.tokenAudit(tokID) {
+		if ev.Action == "message.created" && slices.Contains(ev.Changes, "contact:"+sam) {
+			sawAudit = true
+		}
+	}
+	if !sawAudit {
+		t.Fatal("no message.created audit event naming contact:<id>")
+	}
 	f.reply(f.dana.Access, key, "public", "From Dana")
 	f.drain()
 	by := hookEnvelopes(t, hs)
@@ -301,6 +332,9 @@ func TestRequesterSideResolve(t *testing.T) {
 	for _, ev := range f.tokenAudit(tokID) {
 		if ev.Action == "ticket.resolved" && ev.ActorType == "service" {
 			audited = true
+			if !slices.Equal(ev.ActorScopes, []string{"tickets:replyAsRequester"}) {
+				t.Fatalf("audit scopes %v", ev.ActorScopes)
+			}
 		}
 	}
 	if !audited {
@@ -311,7 +345,7 @@ func TestRequesterSideResolve(t *testing.T) {
 	if len(got) == 0 {
 		t.Fatal("no statusChanged webhook")
 	}
-	if d := obj(got[len(got)-1], "data"); d["transition"] != "resolve" || obj(d, "status")["category"] != "resolved" {
+	if d := obj(got[len(got)-1], "data"); d["transition"] != "resolve" || obj(d, "status")["category"] != "resolved" || d["by"] != "requester" {
 		t.Fatalf("webhook: %v", d)
 	}
 
@@ -323,4 +357,182 @@ func TestRequesterSideResolve(t *testing.T) {
 	resolve(tok).expect(200)
 	f.do("POST", tpath(key, "/transitions"), map[string]any{"action": "archive"}, bearer(f.dana.Access), ifMatchV(f.version(key))).expect(200)
 	resolve(tok).expect(409, "ticketArchived")
+}
+
+func TestRequesterSideResolveStatesAndStatusChangedBy(t *testing.T) {
+	f := newAutomationFixture(t)
+	f.c.Boot.Env = EnvDevelopment
+	hs := newHookServer(t)
+	f.addHook(hs, "ticket.statusChanged")
+	f.do("PUT", "/api/v1/sla", testPolicy(), bearer(f.admin.Access)).expect(200)
+	f.do("PUT", "/api/v1/automation", map[string]any{"archiveAfterResolvedDays": 3, "customerFollowupAfterHours": 24, "maxReminders": 2,
+		"reminderCooldownHours": 24, "autoResolveAfterHours": 48}, bearer(f.admin.Access), header("If-Match", "0")).expect(200)
+	_, tok := f.token("Portal", "tickets:read", "tickets:replyAsRequester")
+	mk := func(subject string) string {
+		return f.createTicket(f.integration, map[string]any{"subject": subject}).Ref()
+	}
+	resolve := func(key string) {
+		t.Helper()
+		f.do("POST", tpath(key, "/transitions"), map[string]any{"action": "resolve"}, bearer(tok)).expect(200)
+	}
+
+	// From Awaiting customer: the reminder timers are cleared and the SLA stops.
+	a := mk("Awaiting")
+	f.waiting(f.dana.Access, a)
+	resolve(a)
+	if f.category(a) != "resolved" {
+		t.Fatalf("category %s", f.category(a))
+	}
+	if s := slaOf(f.get(f.dana.Access, a).expect(200).JSON()); s != nil && target(s, "firstResponse")["state"] == "running" {
+		t.Fatalf("SLA still running after resolve: %v", s)
+	}
+	f.advance(30 * time.Hour)
+	if n := f.reminders(a); n != 0 {
+		t.Fatalf("reminders after resolve: %d", n)
+	}
+
+	// From On hold: the hold ends with the resolve.
+	b := mk("Held")
+	f.hold(f.dana.Access, b, f.holdReasonID("Waiting on Engineering"), nil).expect(200)
+	resolve(b)
+	if tk := f.get(f.dana.Access, b).expect(200).JSON(); obj(tk, "status")["category"] != "resolved" || tk["hold"] != nil {
+		t.Fatalf("held ticket after resolve: %v", tk)
+	}
+
+	// by: staff, requester reply, automation (auto-resolve and hold ended).
+	e := mk("Staff resolves")
+	f.do("POST", tpath(e, "/transitions"), map[string]any{"action": "resolve"}, bearer(f.dana.Access), ifMatchV(f.version(e))).expect(200)
+	f.do("POST", tpath(e, "/messages"), map[string]any{"visibility": "public", "body": "Not fixed", "as": "requester"}, bearer(tok)).expect(201)
+	c := mk("Auto resolved")
+	f.waiting(f.dana.Access, c)
+	for i := 0; i < 10 && f.category(c) == "waitingCustomer"; i++ {
+		f.advance(25 * time.Hour)
+	}
+	if f.category(c) != "resolved" && f.category(c) != "archived" {
+		t.Fatalf("not auto-resolved: %s", f.category(c))
+	}
+	d := mk("Hold ends")
+	reason := f.holdReasonID("Waiting on Engineering")
+	var days float64
+	for _, r := range f.do("GET", "/api/v1/hold-reasons", nil, bearer(f.admin.Access)).expect(200).Items() {
+		if r["id"] == reason {
+			days = r["maxDays"].(float64)
+		}
+	}
+	f.hold(f.dana.Access, d, reason, nil).expect(200)
+	f.advance(time.Duration(days*24+1) * time.Hour)
+	f.runDue()
+
+	got := map[string]map[string]bool{}
+	for _, env := range hookEnvelopes(t, hs)["ticket.statusChanged"] {
+		data := obj(env, "data")
+		tr, _ := data["transition"].(string)
+		by, _ := data["by"].(string)
+		if got[tr] == nil {
+			got[tr] = map[string]bool{}
+		}
+		got[tr][by] = true
+	}
+	want := map[string]string{"requesterReply": "requester", "holdEnded": "automation", "archive": "automation"}
+	for tr, by := range want {
+		if len(got[tr]) != 1 || !got[tr][by] {
+			t.Fatalf("transition %s by %v, want only %s (all: %v)", tr, got[tr], by, got)
+		}
+	}
+	for _, by := range []string{"staff", "requester", "automation"} {
+		if !got["resolve"][by] {
+			t.Fatalf("no resolve by %s: %v", by, got["resolve"])
+		}
+	}
+}
+
+func TestMCPRequesterSideFiltersAndResolve(t *testing.T) {
+	f := newMCPFixture(t)
+	acme := f.createOrg(f.admin.Access, "Acme Ltd", "")["id"].(string)
+	globex := f.createOrg(f.admin.Access, "Globex", "")["id"].(string)
+	priya := f.contact("Priya Raman", "priya@acme.example", acme, "")
+	gus := f.contact("Gus Other", "gus@globex.example", globex, "")
+	t1 := f.createTicket(f.ticketFixture.integration, map[string]any{"organisationId": acme, "requester": map[string]any{"contactId": priya}}).Ref()
+	t2 := f.createTicket(f.ticketFixture.integration, map[string]any{"organisationId": globex, "requester": map[string]any{"contactId": gus}}).Ref()
+	_, tok := f.token("Portal", "tickets:read", "tickets:replyAsRequester")
+	s := f.connect(tok)
+	list := func(args map[string]any) []string {
+		t.Helper()
+		var out []string
+		items, _ := mustCall(t, s, "ticketsList", args)["items"].([]any)
+		for _, it := range items {
+			out = append(out, refOf(it.(map[string]any)))
+		}
+		return out
+	}
+	if got := list(map[string]any{"organisationId": acme}); len(got) != 1 || got[0] != t1 {
+		t.Fatalf("organisationId: %v", got)
+	}
+	if got := list(map[string]any{"requesterId": gus}); len(got) != 1 || got[0] != t2 {
+		t.Fatalf("requesterId: %v", got)
+	}
+	if got := list(map[string]any{"requesterId": gus, "organisationId": acme}); len(got) != 0 {
+		t.Fatalf("combined: %v", got)
+	}
+	if got := list(map[string]any{"statusId": f.statusID("resolved")}); len(got) != 0 {
+		t.Fatalf("statusId: %v", got)
+	}
+
+	// Resolve works for this token, nothing else of the lifecycle does.
+	out := mustCall(t, s, "ticketsTransition", map[string]any{"ticket": t1, "action": "resolve"})
+	if obj(out, "status")["category"] != "resolved" {
+		t.Fatalf("resolve: %v", out)
+	}
+	if got := list(map[string]any{"statusId": f.statusID("resolved")}); len(got) != 1 || got[0] != t1 {
+		t.Fatalf("resolved list: %v", got)
+	}
+	mustFail(t, s, "ticketsTransition", map[string]any{"ticket": t1, "action": "archive"}, "userRequired")
+	mustFail(t, s, "ticketsTransition", map[string]any{"ticket": t2, "action": "setStatus", "statusId": f.statusID("open")}, "userRequired")
+	_, reader := f.token("Reader", "tickets:read")
+	mustFail(t, f.connect(reader), "ticketsTransition", map[string]any{"ticket": t2, "action": "resolve"}, "userRequired")
+}
+
+// The requester list filter reads the requester index in order (no SORT stage).
+func TestRequesterListUsesProjectRequesterIndex(t *testing.T) {
+	f := newTicketFixture(t)
+	f.createTicket(f.integration, map[string]any{})
+	col := f.coll("tickets")
+	var doc bson.M
+	if err := col.FindOne(context.Background(), bson.D{}).Decode(&doc); err != nil {
+		t.Fatal(err)
+	}
+	cmd := bson.D{{Key: "explain", Value: bson.D{{Key: "find", Value: "tickets"},
+		{Key: "filter", Value: bson.D{{Key: "projectId", Value: doc["projectId"]}, {Key: "requesterId", Value: doc["requesterId"]}}},
+		{Key: "sort", Value: bson.D{{Key: "publicUpdatedAt", Value: -1}, {Key: "_id", Value: -1}}}}},
+		{Key: "verbosity", Value: "queryPlanner"}}
+	var res bson.M
+	if err := col.Database().RunCommand(context.Background(), cmd).Decode(&res); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := bson.MarshalExtJSON(res, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var parsed struct {
+		QueryPlanner struct {
+			WinningPlan json.RawMessage `json:"winningPlan"`
+		} `json:"queryPlanner"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		t.Fatal(err)
+	}
+	plan := parsed.QueryPlanner.WinningPlan
+	if !strings.Contains(string(plan), `"indexName":"projectRequester"`) || strings.Contains(string(plan), `"SORT"`) {
+		t.Fatalf("plan: %s", plan)
+	}
+	// And the old, misplaced index is not on contacts.
+	idx, err := f.coll("contacts").Indexes().ListSpecifications(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, i := range idx {
+		if i.Name == "projectRequester" {
+			t.Fatal("projectRequester index on contacts")
+		}
+	}
 }

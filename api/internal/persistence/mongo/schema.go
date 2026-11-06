@@ -272,7 +272,6 @@ func schemaSpecs() []collectionSpec {
 			}),
 			indexes: []mongo.IndexModel{
 				idx(bson.D{{Key: "projectId", Value: 1}, {Key: "organisationId", Value: 1}}, "projectOrganisation", false),
-				idx(bson.D{{Key: "projectId", Value: 1}, {Key: "requesterId", Value: 1}, {Key: "updatedAt", Value: -1}, {Key: "_id", Value: -1}}, "projectRequester", false),
 				idx(bson.D{{Key: "projectId", Value: 1}, {Key: "emailNormalized", Value: 1}}, "projectEmailUnique", true),
 				{Keys: bson.D{{Key: "projectId", Value: 1}, {Key: "externalId", Value: 1}}, Options: options.Index().SetName("projectExternalIdUnique").SetUnique(true).SetPartialFilterExpression(bson.D{{Key: "externalId", Value: bson.D{{Key: "$type", Value: "string"}}}})},
 			},
@@ -872,6 +871,7 @@ func schemaSpecs() []collectionSpec {
 				idx(bson.D{{Key: "projectId", Value: 1}, {Key: "number", Value: 1}}, "projectNumberUnique", true),
 				idx(bson.D{{Key: "projectId", Value: 1}, {Key: "holdReasonId", Value: 1}}, "projectHoldReason", false),
 				idx(bson.D{{Key: "projectId", Value: 1}, {Key: "organisationId", Value: 1}}, "projectOrganisation", false),
+				idx(bson.D{{Key: "projectId", Value: 1}, {Key: "requesterId", Value: 1}, {Key: "publicUpdatedAt", Value: -1}, {Key: "_id", Value: -1}}, "projectRequester", false),
 				idx(bson.D{{Key: "projectId", Value: 1}, {Key: "createdAt", Value: 1}}, "projectCreated", false),
 				idx(bson.D{{Key: "projectId", Value: 1}, {Key: "resolvedAt", Value: 1}}, "projectResolved", false),
 				textIndex(bson.D{{Key: "projectId", Value: 1}}, "subject", "projectSubjectText"),

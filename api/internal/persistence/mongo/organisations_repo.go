@@ -82,7 +82,7 @@ func (r *OrganisationsRepository) List(ctx context.Context, projectID, q, active
 		}})
 	}
 	if externalRef != "" {
-		filter = append(filter, bson.E{Key: "externalRef", Value: externalRef})
+		filter = append(filter, bson.E{Key: "externalRef", Value: bson.D{{Key: "$eq", Value: externalRef}, {Key: "$type", Value: "string"}}})
 	}
 	filter, err := pageFilter(filter, "nameNormalized", after)
 	if err != nil {

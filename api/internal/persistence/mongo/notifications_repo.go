@@ -100,7 +100,7 @@ func NewNotificationsRepository(s *Store, js *JobsRepository) *NotificationsRepo
 func (d outboxDoc) toRecord() outbox.Record {
 	r := outbox.Record{Id: d.Id.Hex(), WorkspaceId: d.WorkspaceId.Hex(), ProjectId: hexOrEmpty(d.ProjectId), TicketId: hexOrEmpty(d.TicketId),
 		MessageId: hexOrEmpty(d.MessageId), Type: d.Type, Visibility: d.Visibility, TicketVersion: d.TicketVersion,
-		Actor: audit.Actor{Type: d.Actor.Type, Id: d.Actor.Id, Label: d.Actor.Label}, Transition: d.Transition, Changes: d.Changes,
+		Actor: audit.Actor{Type: d.Actor.Type, Id: d.Actor.Id, Label: d.Actor.Label, Scopes: d.Actor.Scopes}, Transition: d.Transition, Changes: d.Changes,
 		UserId: hexOrEmpty(d.UserId), GroupId: hexOrEmpty(d.GroupId), State: d.State, OccurredAt: d.OccurredAt, CreatedAt: d.CreatedAt,
 		LeaseGeneration: d.LeaseGen}
 	if d.MessageAuthor != nil {

@@ -36,9 +36,9 @@ type CopyInput struct {
 // including archived. Not copied: assignee, watchers, status (the copy is
 // Open), SLA (the copy starts its own first-response cycle), later
 // messages, agent notes, history and holds. The first message is authored
-// by the copying staff user or token: it is the original text, but the
-// copier is the one who sent it into the new ticket, and no signature is
-// appended. Attachment bytes are duplicated so redacting or deleting one
+// like any created ticket's: by the copying user, or by the bot for a token
+// holding tickets:comment (or tickets:all), otherwise by the requester. It is
+// the original text, and no signature is appended. Attachment bytes are duplicated so redacting or deleting one
 // ticket's files never affects the other's.
 func (s *Service) Copy(ctx context.Context, scope *access.ProjectScope, ref string, in CopyInput) (Ticket, error) {
 	if err := scope.Require(access.CapTicketCreate); err != nil {

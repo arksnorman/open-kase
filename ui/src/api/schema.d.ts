@@ -1441,7 +1441,7 @@ export interface paths {
         put?: never;
         /**
          * Copy a ticket
-         * @description Creates a new Open ticket linked `copiedFrom` the original (which may be in any state, including archived) in the same transaction. Copies the requester, CC addresses, organisation, priority, request type, group (Triage when inactive), tags that still exist in the catalog, the first public message and, unless `includeAttachments` is false, that message's attachments (the bytes are duplicated). Every copied value except the requester, CC addresses and organisation can be overridden in the body. The first message is authored by the caller and gets no signature. Not copied: assignee, watchers, status, SLA state (the copy starts its own cycle), later messages, agent notes, history and holds. Audited as `ticket.copied`.
+         * @description Creates a new Open ticket linked `copiedFrom` the original (which may be in any state, including archived) in the same transaction. Copies the requester, CC addresses, organisation, priority, request type, group (Triage when inactive), tags that still exist in the catalog, the first public message and, unless `includeAttachments` is false, that message's attachments (the bytes are duplicated). Every copied value except the requester, CC addresses and organisation can be overridden in the body. The first message is authored by the caller (a user, or the bot for a token with `tickets:comment`/`tickets:all`; otherwise the requester) and gets no signature. Not copied: assignee, watchers, status, SLA state (the copy starts its own cycle), later messages, agent notes, history and holds. Audited as `ticket.copied`.
          *
          *     **Permission:** Admins and agents. API tokens: `tickets:create` and `tickets:read` (agent tokens only; requester tokens receive `403 staffOnly`).
          *
@@ -1783,9 +1783,7 @@ export interface paths {
          * Resolve, reopen, archive, hold or set a status
          * @description `hold` puts an Open or Awaiting customer ticket On hold: `holdReasonId` is required and the hold lasts exactly the reason's `maxDays` (`ticket.hold.until`); an optional `note` is saved as an internal note. Resolved and Archived tickets cannot be put on hold (`409 invalidTransition`). The ticket returns to Open on its own at `until` (assignee kept, the assignee is emailed), or earlier when staff change its status or the requester replies. `setStatus` cannot select On hold. The requester is never notified about holds, and the first-response SLA keeps running. A requester-side token (`tickets:replyAsRequester`) closes its ticket with `resolve`: it sees no version, so `If-Match` is not required (and ignored); every other action is `403 userRequired` for it. Resolving a ticket that is already Resolved is `409 invalidTransition`; the requester reopens by replying.
          *
-         *     **Permission:** Admins and agents. (`ticket.transition`) and staff tokens (`tickets:write`). A requester-side token holding `tickets:replyAsRequester` may send `resolve` only.
-         *
-         *     **Versioning:** send `If-Match` with the resource's current `version`; a stale version returns `409 versionConflict`.
+         *     **Permission:** Admins and agents. (`ticket.transition`) and staff tokens (`tickets:write`). A requester-side token holding `tickets:replyAsRequester` may send `resolve` only. `If-Match` is required for users and staff tokens (`428 preconditionRequired` without it) and not used for requester-side resolve.
          */
         post: operations["transitionTicket"];
         delete?: never;
@@ -3199,7 +3197,7 @@ export interface components {
         Scope: {
             description: string;
             name: string;
-            /** @description A token holding this scope acts as support staff (a bot under its own name): staff ticket view, groups and agents, tickets created as staff. */
+            /** @description A token holding this scope acts as support staff: staff ticket view, groups and agents, priority on create. It speaks as a bot under its own name only with tickets:comment or tickets:all. */
             staff: boolean;
         };
         SearchHit: {
@@ -10874,12 +10872,12 @@ export interface operations {
     transitionTicket: {
         parameters: {
             query?: never;
-            header: {
+            header?: {
                 /**
-                 * @description The version being changed: a number, or an entity tag such as "3" or W/"3".
+                 * @description Optional version precondition.
                  * @example 3
                  */
-                "If-Match": components["parameters"]["IfMatch"];
+                "If-Match"?: components["parameters"]["IfMatchOptional"];
             };
             path: {
                 /** @description Ticket number (e.g. `42`; `#42` URL-encoded as `%2342` also works) or ID. */
@@ -10964,15 +10962,6 @@ export interface operations {
             };
             /** @description Valid JSON that fails field rules; `errors` lists each field. Codes: `validationFailed`. */
             422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description If-Match is required. Codes: `preconditionRequired`. */
-            428: {
                 headers: {
                     [name: string]: unknown;
                 };

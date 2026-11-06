@@ -57,10 +57,11 @@ func (p Principal) IsUser() bool { return p.Kind == KindUser }
 
 // IsStaff reports whether the principal acts as support staff: a user, or a
 // token holding a staff scope (StaffScopes: tickets:comment,
-// tickets:internal, tickets:write or tickets:all), which acts as a bot under
-// its own name. Staff see the staff projection of tickets (assignee, tags,
-// SLA, version) and create tickets as staff; other tokens act for the
-// requester side and see the requester projection.
+// tickets:internal, tickets:write or tickets:all). Staff see the staff
+// projection of tickets (assignee, tags, SLA, version) and may set the
+// priority on create; a token speaks as a bot under its own name only with
+// tickets:comment or tickets:all. Other tokens act for the requester side
+// and see the requester projection.
 func (p Principal) IsStaff() bool {
 	return p.IsUser() || (p.Kind == KindIntegration && StaffScopes(p.Scopes))
 }

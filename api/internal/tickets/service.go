@@ -368,8 +368,9 @@ func deref(p *string) string {
 
 // Create opens a ticket in the requested active group or Triage, never
 // assigned to a person, with its first public message. Agents create
-// tickets from the web and agent tokens through the API (the agent or bot
-// is the first message's author); requester tokens create them as the
+// tickets from the web; tokens create them through the API. The first
+// message is authored by the user, or by the bot for a token holding
+// tickets:comment (or tickets:all); any other token creates it as the
 // requester.
 func (s *Service) Create(ctx context.Context, scope *access.ProjectScope, in CreateInput) (Ticket, error) {
 	return s.create(ctx, scope, in, nil)
@@ -1278,6 +1279,10 @@ type TransitionInput struct {
 func (s *Service) Transition(ctx context.Context, scope *access.ProjectScope, ref string, expectedVersion int64, in TransitionInput) (Ticket, error) {
 	requesterResolve := false
 	if !scope.Principal.IsStaff() && in.Action == "resolve" && scope.Can(access.CapTicketReplyAsRequester) {
+		// Record the scope that allowed it (the audit actor's scopes).
+		if err := scope.Require(access.CapTicketReplyAsRequester); err != nil {
+			return Ticket{}, err
+		}
 		requesterResolve = true
 	} else {
 		if err := scope.Principal.RequireStaff(); err != nil {
@@ -1287,6 +1292,18 @@ func (s *Service) Transition(ctx context.Context, scope *access.ProjectScope, re
 			return Ticket{}, err
 		}
 	}
+	// A requester-side resolve has no version of its own: when staff change
+	// the ticket meanwhile it is planned again against the new state.
+	for attempt := 1; ; attempt++ {
+		t, err := s.transition(ctx, scope, ref, expectedVersion, in, requesterResolve)
+		if err != nil && requesterResolve && attempt < maxReplyAttempts && fault.As(err).Code == "versionConflict" {
+			continue
+		}
+		return t, err
+	}
+}
+
+func (s *Service) transition(ctx context.Context, scope *access.ProjectScope, ref string, expectedVersion int64, in TransitionInput, requesterResolve bool) (Ticket, error) {
 	var v validation.Collector
 	v.String(validation.TicketTransitionAction, "action", in.Action)
 	v.String(validation.TicketTransitionReason, "reason", in.Reason)

@@ -106,7 +106,7 @@ function phrase(i: ActivityItem): string {
     case 'ticket.linkRemoved':
       return `removed a ticket link${linkText}`
     case 'ticket.followupReminderSent':
-      return 'emailed the requester a follow-up reminder'
+      return 'sent a follow-up reminder'
     case 'ticket.slaWarning':
       return 'reported that an SLA target is due soon'
     case 'ticket.slaBreached':

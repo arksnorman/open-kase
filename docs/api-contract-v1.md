@@ -126,7 +126,7 @@ refused from the next request after revocation. Send `Authorization: Bearer kase
 | --- | --- |
 | `tickets:read` | tickets and their public messages and attachments; with a staff scope also groups, the member directory and canned replies |
 | `tickets:create` | create tickets and follow-ups (with `tickets:read`) for a requester contact; `priority` applies when the token is staff, otherwise it is recorded as `requestedPriority`. The first message is authored by the bot only when the token holds `tickets:comment` (or `tickets:all`), otherwise by the requester contact |
-| `tickets:replyAsRequester` | public replies **as the ticket's requester** (`author.context = "contact"`; may reopen the ticket, owes a response, never a first response); also lets a requester-side token **resolve** its tickets (`POST /tickets/{t}/transitions {"action":"resolve"}`, no `If-Match` needed) |
+| `tickets:replyAsRequester` | public replies **as the ticket's requester** (`author.context = "contact"`; may reopen the ticket, owes a response, never a first response); also lets a requester-side token **resolve** any ticket it can read (`POST /tickets/{t}/transitions {"action":"resolve"}`, no `If-Match` needed) |
 | `tickets:comment` | public replies **as staff** under the token's name (`author.context = "bot"`; counts as a staff reply for the SLA) |
 | `tickets:internal` | read and write agent notes (the only way a token sees private content) |
 | `tickets:write` | status, priority, tags, request type, organisation, group and assignee |
@@ -221,7 +221,7 @@ follow-up instead.
 
 **On hold.** `ticket.hold = { reasonId, reasonName, until }` (staff only). The hold lasts exactly the reason's
 `maxDays`; a durable job returns the ticket to Open at `until` (assignee kept, audited `ticket.holdEnded`, the
-assignee is emailed). A staff status change or a requester reply ends it earlier. The requester is never notified,
+assignee is emailed). A staff status change, a requester reply or a requester-side resolve ends it earlier. The requester is never notified,
 the first-response SLA keeps running, and reminders and auto-resolve do not apply while on hold.
 
 **Hold reasons.** `GET/POST /hold-reasons`, `PATCH/DELETE /hold-reasons/{h}`: `{ name, maxDays }` (name 1-80,

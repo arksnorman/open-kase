@@ -28,7 +28,11 @@ be able to see more. Keep the token on your server, never in the browser.
 - Create one organisation per account in your application: `POST /organisations { name, externalRef }`, where
   `externalRef` is your account ID. Store the returned `id`.
 - Create a contact for each person who uses the portal: `POST /contacts { name, email, externalId,
-  organisationId }`. `externalId` is your user ID; `POST` upserts by email. Store the returned `id`.
+  organisationId }`. `externalId` is your user ID. `POST` upserts: it matches an existing contact by `externalId` first, then by email (the
+  name, email and organisation link are then updated). If the `externalId` belongs to one contact and the email to
+  another, or the email already carries a different `externalId`, it answers `409 contactConflict`. Store the returned `id`.
+- Look up without writing: `GET /contacts?externalId=<your user ID>` and `GET /organisations?externalRef=<your account ID>`
+  are exact matches (`acct-1` never returns `acct-10`). Deactivated organisations only appear with `active=all`.
 - When an account closes, deactivate the organisation (`PATCH /organisations/{o} { active: false }`). Organisations
   in use cannot be deleted. `PATCH /organisations/{o}` needs `If-Match: <version>` (the `version` from the organisation).
 
@@ -66,7 +70,7 @@ it. Agents cannot change the organisation of a ticket your integration created.
 - **Attachments:** the token can upload with `POST /attachments` (multipart, field `file`), pass the returned IDs as `attachmentIds` when
   creating a ticket or posting a message, and download them with `GET /attachments/{a}/download`.
 - **Close:** resolve with `POST /tickets/{t}/transitions { "action": "resolve" }`. The portal token needs no `If-Match` (it sees no version). Resolving a
-  ticket that is already resolved is `409 invalidTransition`; the customer reopens it by replying. Archiving happens automatically through auto-archive (`archiveAfterResolvedDays`, set by an admin) or by agents; archived is final, so to continue the conversation create a
+  ticket also ends a hold. Resolving a ticket that is already resolved is `409 invalidTransition`; the customer reopens it by replying. Archiving happens automatically through auto-archive (`archiveAfterResolvedDays`, set by an admin) or by agents; archived is final, so to continue the conversation create a
   follow-up (`POST /tickets/{t}/follow-up`).
 
 ## 5. Send notifications yourself (optional)
@@ -84,7 +88,10 @@ reminders). If your application sends its own emails or in-app notifications:
    `ccEmails`, so you can notify the right people without calling the API back. In `ticket.message.public`, `message.author` is
    `{context, id, name}`; `id` is the contact's ID for a customer author (compare it with `requester.id` to see a teammate), so notify the
    requester, the CC addresses and the other contacts except the author.
-3. Handle `ticket.followupReminder`: open-kase is waiting for the customer. When `autoResolveNotice` is `true` this
+3. `ticket.statusChanged` carries `by`: `"requester"` when the customer resolved the ticket with the portal token (or a
+   reply reopened it), `"staff"` for agents and staff tokens, `"automation"` for auto-resolve, auto-archive and a
+   hold that ended. Skip notifying the customer when `by` is `"requester"`: they just did it themselves.
+4. Handle `ticket.followupReminder`: open-kase is waiting for the customer. When `autoResolveNotice` is `true` this
    is the last reminder and the ticket will be resolved automatically if nobody replies; tell the customer so.
 
 Delivery is at least once: de-duplicate on `eventId` and use `ticket.revision` to ignore events with a *lower* revision (follow-up reminders do not advance it). See

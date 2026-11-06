@@ -48,7 +48,7 @@ A missing scope answers `insufficientScope`, a user-only tool `userRequired`, ex
 | `ticketsCreate` | `POST /tickets` | `tickets:create` (the requester writes the first message) | `tickets:create` (the bot writes it only with `tickets:comment` or `tickets:all`, otherwise the requester) | admins and agents |
 | `ticketsFollowUp` | `POST /tickets/{t}/follow-up` | `tickets:create` + `tickets:read` | same | admins and agents |
 | `ticketsCopy` | `POST /tickets/{t}/copy` | — (`staffOnly`) | `tickets:create` + `tickets:read` | admins and agents |
-| `ticketsReply` | `POST /tickets/{t}/messages` (public) | `tickets:comment` (as the requester) | `tickets:comment` (as the bot; a staff reply) | admins and agents |
+| `ticketsReply` | `POST /tickets/{t}/messages` (public) | `tickets:replyAsRequester` (as the requester) | `tickets:comment` (as the bot; a staff reply) | admins and agents |
 | `ticketsAddNote` | `POST /tickets/{t}/messages` (agent) | — (`insufficientScope`) | `tickets:internal` | admins and agents |
 | `ticketsUpdate` | `PATCH /tickets/{t}` | `subject` only, on tickets it created | `tickets:write` (priority, tags, request type, `organisationId`) | admins and agents |
 | `ticketsTransition` | `POST /tickets/{t}/transitions` | `tickets:replyAsRequester`, `resolve` only, no `expectedVersion` needed (other actions `userRequired`) | `tickets:write` | admins and agents |

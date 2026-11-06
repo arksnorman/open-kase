@@ -230,7 +230,7 @@ func (r *TicketsRepository) insertOutbox(ctx context.Context, doc ticketDoc, eve
 	for _, e := range events {
 		tid := doc.Id
 		d := outboxDoc{Id: bson.NewObjectID(), WorkspaceId: doc.WorkspaceId, ProjectId: optOID(e.ProjectId), TicketId: &tid,
-			Type: e.Type, Visibility: e.Visibility, TicketVersion: doc.Version, Actor: toActorDoc(e.Actor), State: state,
+			Type: e.Type, Visibility: e.Visibility, TicketVersion: doc.Version, Actor: actorDoc{Type: e.Actor.Type, Id: e.Actor.Id, Label: e.Actor.Label, Scopes: e.Actor.Scopes}, State: state,
 			Transition: e.Transition, Changes: e.Changes, Snapshot: snapshotOf(doc),
 			SchemaVersion: outbox.SchemaVersion, OccurredAt: e.OccurredAt, CreatedAt: now}
 		if e.UserId != "" {

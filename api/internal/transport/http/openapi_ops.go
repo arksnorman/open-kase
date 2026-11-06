@@ -320,7 +320,7 @@ func operations() []op {
 			Errors:  []errSpec{errTicket, errArchived, errForbidden, {409, []string{"groupInactive"}}},
 			Example: map[string]any{"groupId": "665f1c2b8e4a3d0012345678", "assigneeId": nil}},
 		{Method: "POST", Path: "/api/v1/tickets/:t/transitions", Id: "transitionTicket", Tag: "Tickets", Summary: "Resolve, reopen, archive, hold or set a status",
-			Auth: authUserOrToken, Permission: permMember + " (`ticket.transition`) and staff tokens (`tickets:write`). A requester-side token holding `tickets:replyAsRequester` may send `resolve` only.", Request: transitionTicketRequest{}, Response: ticketDTO{}, IfMatch: ifMatchRequired,
+			Auth: authUserOrToken, Permission: permMember + " (`ticket.transition`) and staff tokens (`tickets:write`). A requester-side token holding `tickets:replyAsRequester` may send `resolve` only. `If-Match` is required for users and staff tokens (`428 preconditionRequired` without it) and not used for requester-side resolve.", Request: transitionTicketRequest{}, Response: ticketDTO{}, IfMatch: ifMatchOptional,
 			Errors: []errSpec{errTicket, errArchived, errForbidden, {409, []string{"invalidTransition"}}},
 			Description: "`hold` puts an Open or Awaiting customer ticket On hold: `holdReasonId` is required and the hold lasts exactly the reason's `maxDays` " +
 				"(`ticket.hold.until`); an optional `note` is saved as an internal note. Resolved and Archived tickets cannot be put on hold (`409 invalidTransition`). " +
@@ -412,7 +412,7 @@ func operations() []op {
 			Description: "Creates a new Open ticket linked `copiedFrom` the original (which may be in any state, including archived) in the same transaction. " +
 				"Copies the requester, CC addresses, organisation, priority, request type, group (Triage when inactive), tags that still exist in the catalog, " +
 				"the first public message and, unless `includeAttachments` is false, that message's attachments (the bytes are duplicated). Every copied value " +
-				"except the requester, CC addresses and organisation can be overridden in the body. The first message is authored by the caller and gets no " +
+				"except the requester, CC addresses and organisation can be overridden in the body. The first message is authored by the caller (a user, or the bot for a token with `tickets:comment`/`tickets:all`; otherwise the requester) and gets no " +
 				"signature. Not copied: assignee, watchers, status, SLA state (the copy starts its own cycle), later messages, agent notes, history and holds. " +
 				"Audited as `ticket.copied`.",
 			Request: copyRequest{}, Response: ticketDTO{}, Status: 201, Idempotent: true, Errors: []errSpec{errTicket, errForbidden, {409, []string{"tooManyLinks"}}},

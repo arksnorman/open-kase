@@ -128,6 +128,7 @@ func (s *Service) List(ctx context.Context, scope *access.ProjectScope, q, activ
 	var v validation.Collector
 	v.String(validation.SearchQuery, "q", q)
 	v.String(validation.OrganisationActiveFilter, "active", active)
+	externalRef = strings.TrimSpace(externalRef)
 	if externalRef != "" {
 		v.String(validation.OrganisationExternalRef, "externalRef", externalRef)
 	}

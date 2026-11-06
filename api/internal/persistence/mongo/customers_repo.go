@@ -46,7 +46,7 @@ func (r *CustomersRepository) FindContact(ctx context.Context, projectID, extern
 	var byExt, byEmail contactDoc
 	extErr := mongo.ErrNoDocuments
 	if externalID != "" {
-		extErr = col.FindOne(ctx, bson.D{{Key: "projectId", Value: pid}, {Key: "externalId", Value: externalID}}).Decode(&byExt)
+		extErr = col.FindOne(ctx, bson.D{{Key: "projectId", Value: pid}, {Key: "externalId", Value: bson.D{{Key: "$eq", Value: externalID}, {Key: "$type", Value: "string"}}}}).Decode(&byExt)
 		if extErr != nil && !errors.Is(extErr, mongo.ErrNoDocuments) {
 			return customers.Contact{}, extErr
 		}
@@ -90,7 +90,7 @@ func (r *CustomersRepository) upsertContact(ctx context.Context, c customers.Con
 		var byExt, byEmail *contactDoc
 		if c.ExternalId != "" {
 			var d contactDoc
-			err := col.FindOne(ctx, bson.D{{Key: "projectId", Value: pid}, {Key: "externalId", Value: c.ExternalId}}).Decode(&d)
+			err := col.FindOne(ctx, bson.D{{Key: "projectId", Value: pid}, {Key: "externalId", Value: bson.D{{Key: "$eq", Value: c.ExternalId}, {Key: "$type", Value: "string"}}}}).Decode(&d)
 			if err == nil {
 				byExt = &d
 			} else if !errors.Is(err, mongo.ErrNoDocuments) {
@@ -230,7 +230,7 @@ func (r *CustomersRepository) ListContacts(ctx context.Context, projectID, prefi
 		filter = append(filter, bson.E{Key: "emailNormalized", Value: prefixRegex(prefix)})
 	}
 	if externalID != "" {
-		filter = append(filter, bson.E{Key: "externalId", Value: externalID})
+		filter = append(filter, bson.E{Key: "externalId", Value: bson.D{{Key: "$eq", Value: externalID}, {Key: "$type", Value: "string"}}})
 	}
 	filter, err := pageFilter(filter, "emailNormalized", after)
 	if err != nil {

@@ -124,7 +124,7 @@ const GROUPS = [
 const CHIP: Record<string, string> = {
   'tickets:read': 'read',
   'tickets:create': 'create',
-  'tickets:replyAsRequester': 'reply as requester',
+  'tickets:replyAsRequester': 'reply as requester, resolve',
   'tickets:comment': 'reply as staff',
   'tickets:internal': 'internal notes',
   'tickets:write': 'change & assign',
@@ -141,7 +141,7 @@ const CHIP: Record<string, string> = {
 const TITLE: Record<string, string> = {
   'tickets:read': 'Read tickets and public messages',
   'tickets:create': 'Create tickets',
-  'tickets:replyAsRequester': 'Reply as the requester',
+  'tickets:replyAsRequester': 'Reply as the requester and resolve tickets',
   'tickets:comment': 'Reply as staff',
   'tickets:internal': 'Read and write internal notes',
   'tickets:write': 'Change status, priority, tags; transfer and assign',
@@ -173,7 +173,7 @@ const scopeGroups = computed(() =>
 )
 const presets = [
   { id: 'agent', title: 'AI agent / staff bot', text: 'Reads tickets, replies as staff, notes, updates', scopes: ['tickets:read', 'tickets:comment', 'tickets:internal', 'tickets:write', 'tags:read'] },
-  { id: 'portal', title: 'Requester portal', text: 'Creates tickets and replies for the requester', scopes: ['tickets:read', 'tickets:create', 'tickets:replyAsRequester', 'contacts:read', 'contacts:write'] },
+  { id: 'portal', title: 'Requester portal', text: 'Creates tickets, replies for and resolves as the requester', scopes: ['tickets:read', 'tickets:create', 'tickets:replyAsRequester', 'contacts:read', 'contacts:write', 'organisations:read', 'organisations:write'] },
   { id: 'readonly', title: 'Read only', text: 'Reads tickets, for reports or dashboards', scopes: ['tickets:read'] },
   { id: 'custom', title: 'Custom', text: 'Pick every permission yourself', scopes: [] as string[] },
 ]
