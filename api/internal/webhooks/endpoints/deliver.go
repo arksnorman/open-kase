@@ -304,7 +304,6 @@ func (w *Deliverer) build(ctx context.Context, ep Endpoint, typ, eventID string)
 		if t.RequestedPriority > 0 {
 			data["requestedPriority"] = t.RequestedPriority
 		}
-		addActingContact(data, ev.Changes)
 		data["createdAt"] = t.CreatedAt
 	case webhooks.TypeTicketUpdated:
 		changes := ev.Changes
@@ -402,9 +401,9 @@ func (w *Deliverer) build(ctx context.Context, ep Endpoint, typ, eventID string)
 	return env.Marshal()
 }
 
-// addActingContact sets contactId when another contact of the ticket's
-// organisation acted for the customer side instead of the requester (the
-// event's contact:<id> mark); the key is absent otherwise.
+// addActingContact sets contactId on a status change when another contact of
+// the ticket's organisation acted for the customer side instead of the
+// requester (the event's contact:<id> mark); the key is absent otherwise.
 func addActingContact(data map[string]any, changes []string) {
 	for _, c := range changes {
 		if id, ok := strings.CutPrefix(c, tickets.ContactMark); ok && id != "" {

@@ -192,7 +192,7 @@ type ticketsFollowUpIn struct {
 	GroupId        string   `json:"groupId,omitempty" jsonschema:"Defaults to the original's group."`
 	RequestTypeId  string   `json:"requestTypeId,omitempty" jsonschema:"Defaults to the original's request type."`
 	Tags           []string `json:"tags,omitempty" jsonschema:"Catalog tags for the follow-up (none by default)."`
-	ContactId      string   `json:"contactId,omitempty" jsonschema:"Only when the first message is written as the requester (a token with neither tickets:comment nor tickets:all): author it as this contact of the original's organisation (422 contactNotInOrganisation otherwise). The new ticket's requester stays the original's. Otherwise 422 notAllowed."`
+	ContactId      string   `json:"contactId,omitempty" jsonschema:"Only when the first message is written as the requester (a token with neither tickets:comment nor tickets:all): open the follow-up as this contact of the original's organisation (422 contactNotInOrganisation otherwise): they become the requester of the new ticket and author its first message. Otherwise 422 notAllowed."`
 	IdempotencyKey string   `json:"idempotencyKey,omitempty" jsonschema:"Optional key (1-200 printable ASCII); a retry with the same key and arguments returns the first ticket."`
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/url"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -169,15 +170,15 @@ func TestFollowUpAsOrganisationContact(t *testing.T) {
 	for _, token := range []string{tok, noBot} {
 		key := followUp(token, map[string]any{"contactId": sam, "body": "From Sam"}).expect(201).Ref()
 		tk := f.get(f.admin.Access, key).expect(200).JSON()
-		if obj(tk, "requester")["id"] != priya {
-			t.Fatalf("follow-up requester: %v", tk["requester"])
+		if obj(tk, "requester")["id"] != sam || obj(tk, "organisation")["id"] != acme {
+			t.Fatalf("follow-up requester: %v", tk)
 		}
 		msgs := f.do("GET", tpath(key, "/messages"), nil, bearer(f.admin.Access)).expect(200).Items()
 		if len(msgs) != 1 || obj(msgs[0], "author")["id"] != sam || obj(msgs[0], "author")["context"] != "contact" {
 			t.Fatalf("first message: %v", msgs)
 		}
 		got := f.auditChanges(tk["id"].(string), "ticket.created")
-		if len(got) != 1 || !slices.Contains(got[0], "contact:"+sam) {
+		if len(got) != 1 || slices.ContainsFunc(got[0], func(c string) bool { return strings.HasPrefix(c, "contact:") }) {
 			t.Fatalf("created audit changes: %v", got)
 		}
 	}
@@ -187,7 +188,7 @@ func TestFollowUpAsOrganisationContact(t *testing.T) {
 		key := followUp(tok, body).expect(201).Ref()
 		tk := f.get(f.admin.Access, key).expect(200).JSON()
 		msgs := f.do("GET", tpath(key, "/messages"), nil, bearer(f.admin.Access)).expect(200).Items()
-		if obj(msgs[0], "author")["id"] != priya {
+		if obj(msgs[0], "author")["id"] != priya || obj(tk, "requester")["id"] != priya {
 			t.Fatalf("author: %v", msgs[0])
 		}
 		if got := f.auditChanges(tk["id"].(string), "ticket.created"); slices.ContainsFunc(got[0], func(c string) bool { return len(c) > 8 && c[:8] == "contact:" }) {
@@ -207,11 +208,15 @@ func TestFollowUpAsOrganisationContact(t *testing.T) {
 	if msgs := f.do("GET", tpath(late, "/messages"), nil, bearer(f.admin.Access)).expect(200).Items(); len(msgs) != 1 || obj(msgs[0], "author")["id"] != sam {
 		t.Fatalf("follow-up to an archived ticket: %v", msgs)
 	}
+	if tk := f.get(f.admin.Access, late).expect(200).JSON(); obj(tk, "requester")["id"] != sam {
+		t.Fatalf("follow-up requester: %v", tk["requester"])
+	}
 }
 
 // The acting contact reaches webhook receivers as contactId on
-// ticket.statusChanged (a resolve, a reply that reopens) and ticket.created
-// (a follow-up), and only when it is not the requester.
+// ticket.statusChanged (a resolve, a reply that reopens), and only when it is
+// not the requester. A follow-up a teammate opened has the teammate as its
+// requester and carries no contactId.
 func TestActingContactInWebhooks(t *testing.T) {
 	f := newNotifyFixture(t)
 	f.c.Boot.Env = EnvDevelopment
@@ -280,13 +285,13 @@ func TestActingContactInWebhooks(t *testing.T) {
 	d, _ = last("ticket.statusChanged")
 	want(d, "resolve", "staff", nil)
 
-	// Follow-ups: the teammate's carries contactId, the requester's does not.
+	// Follow-ups: no contactId; the teammate is the requester of theirs.
 	f.do("POST", tpath(key, "/follow-up"), map[string]any{"contactId": sam}, bearer(tok)).expect(201)
-	if d, _ := last("ticket.created"); d["contactId"] != sam || obj(d, "requester")["id"] != priya {
+	if d, _ := last("ticket.created"); d["contactId"] != nil || obj(d, "requester")["id"] != sam {
 		t.Fatalf("teammate follow-up: %v", d)
 	}
 	f.do("POST", tpath(key, "/follow-up"), map[string]any{}, bearer(tok)).expect(201)
-	if d, _ := last("ticket.created"); d["contactId"] != nil {
+	if d, _ := last("ticket.created"); d["contactId"] != nil || obj(d, "requester")["id"] != priya {
 		t.Fatalf("requester follow-up: %v", d)
 	}
 }
@@ -302,14 +307,14 @@ func TestMCPFollowUpAsOrganisationContact(t *testing.T) {
 	out := mustCall(t, f.connect(tok), "ticketsFollowUp", map[string]any{"ticket": orig, "contactId": sam, "body": "From Sam"})
 	key := refOf(out)
 	tk := f.get(f.admin.Access, key).expect(200).JSON()
-	if obj(tk, "requester")["id"] != priya {
+	if obj(tk, "requester")["id"] != sam {
 		t.Fatalf("follow-up requester: %v", tk["requester"])
 	}
 	msgs := f.do("GET", tpath(key, "/messages"), nil, bearer(f.admin.Access)).expect(200).Items()
 	if len(msgs) != 1 || obj(msgs[0], "author")["id"] != sam {
 		t.Fatalf("first message: %v", msgs)
 	}
-	if got := f.auditChanges(tk["id"].(string), "ticket.created"); len(got) != 1 || !slices.Contains(got[0], "contact:"+sam) {
+	if got := f.auditChanges(tk["id"].(string), "ticket.created"); len(got) != 1 || slices.ContainsFunc(got[0], func(c string) bool { return strings.HasPrefix(c, "contact:") }) {
 		t.Fatalf("created audit changes: %v", got)
 	}
 }
@@ -389,4 +394,54 @@ func TestMCPListStaffFilters(t *testing.T) {
 func (f *ticketFixture) statusCategory(key string) string {
 	f.t.Helper()
 	return category(f.get(f.admin.Access, key).expect(200))
+}
+
+// A teammate's follow-up is theirs: the "received" email goes to them (and the
+// copied CC addresses, without their own), and staff replies go to them.
+func TestTeammateFollowUpEmailsTheTeammate(t *testing.T) {
+	f := newNotifyFixture(t)
+	acme, priya, sam, _, _ := f.orgContacts()
+	_, tok := f.token("Portal", "tickets:read", "tickets:create")
+	orig := f.createTicket(f.integration, map[string]any{"organisationId": acme, "requester": map[string]any{"contactId": priya},
+		"ccEmails": []string{"ops@acme.example", "SAM@acme.example"}}).Ref()
+	f.drain()
+
+	f.mail.Reset()
+	key := f.do("POST", tpath(orig, "/follow-up"), map[string]any{"contactId": sam, "body": "From Sam"}, bearer(tok)).expect(201).Ref()
+	f.drain()
+	tk := f.get(f.admin.Access, key).expect(200).JSON()
+	if obj(tk, "requester")["id"] != sam || !slices.Equal(strs(tk["ccEmails"]), []string{"ops@acme.example"}) {
+		t.Fatalf("follow-up: requester %v, cc %v", tk["requester"], tk["ccEmails"])
+	}
+	for addr, want := range map[string]int{"sam@acme.example": 1, "ops@acme.example": 1, "priya@acme.example": 0} {
+		if got := len(sentTo(f.mail, addr)); got != want {
+			t.Fatalf("emails to %s: %d, want %d: %+v", addr, got, want, f.mail.Sent())
+		}
+	}
+	// A staff reply goes to the teammate, not the original requester.
+	f.mail.Reset()
+	f.reply(f.dana.Access, key, "public", "Looking into it")
+	f.drain()
+	if len(sentTo(f.mail, "sam@acme.example")) != 1 || len(sentTo(f.mail, "priya@acme.example")) != 0 {
+		t.Fatalf("staff reply emails: %+v", f.mail.Sent())
+	}
+
+	// A follow-up by staff, or without contactId, keeps the original requester and CC list.
+	for _, key := range []string{
+		f.do("POST", tpath(orig, "/follow-up"), map[string]any{}, bearer(tok)).expect(201).Ref(),
+		f.do("POST", tpath(orig, "/follow-up"), map[string]any{}, bearer(f.dana.Access)).expect(201).Ref(),
+	} {
+		tk := f.get(f.admin.Access, key).expect(200).JSON()
+		if obj(tk, "requester")["id"] != priya || len(strs(tk["ccEmails"])) != 2 {
+			t.Fatalf("follow-up: requester %v, cc %v", tk["requester"], tk["ccEmails"])
+		}
+	}
+}
+
+func strs(v any) []string {
+	var out []string
+	for _, x := range v.([]any) {
+		out = append(out, x.(string))
+	}
+	return out
 }

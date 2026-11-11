@@ -211,7 +211,7 @@ func TestRequesterReplyHasNoContent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.Text, "You received a response on ticket #7") || !strings.Contains(out.Subject, "#7") {
+	if !strings.Contains(out.Text, "There is a new reply on ticket #7") || !strings.Contains(out.Subject, "#7") {
 		t.Fatalf("text = %s", out.Text)
 	}
 }

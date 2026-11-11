@@ -1,6 +1,6 @@
 {{define "content"}}{{if .RecipientName}}Hello {{.RecipientName}},
 
-{{end}}You received a response on ticket {{.Ticket.Ref}}.
+{{end}}There is a new reply on ticket {{.Ticket.Ref}}.
 
 {{.Ticket.Ref}}: {{.Ticket.Subject}}
 

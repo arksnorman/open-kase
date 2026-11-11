@@ -3,11 +3,12 @@ package tickets
 import (
 	"context"
 	"errors"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/arksnorman/open-kase/api/internal/access"
 	"github.com/arksnorman/open-kase/api/internal/audit"
-	"github.com/arksnorman/open-kase/api/internal/customers"
 	"github.com/arksnorman/open-kase/api/internal/outbox"
 	"github.com/arksnorman/open-kase/api/package/fault"
 	"github.com/arksnorman/open-kase/api/package/validation"
@@ -301,8 +302,15 @@ func (s *Service) FollowUp(ctx context.Context, scope *access.ProjectScope, ref 
 		body = *in.Body
 	}
 	contactID, rtID := orig.Requester.Id, orig.RequestType.Id
+	cc := orig.CCEmails
+	if hasContact {
+		// A teammate who opens the follow-up is its requester; they are
+		// not also copied.
+		contactID = contact.Id
+		cc = slices.DeleteFunc(slices.Clone(cc), func(a string) bool { return strings.EqualFold(a, contact.Email) })
+	}
 	cin := CreateInput{Subject: subject, Body: body, Priority: in.Priority, RequestTypeId: &rtID,
-		Requester: RequesterInput{ContactId: &contactID}, OrganisationId: orgIDPtr(orig), keepOrganisation: true, CCEmails: orig.CCEmails}
+		Requester: RequesterInput{ContactId: &contactID}, OrganisationId: orgIDPtr(orig), keepOrganisation: true, CCEmails: cc}
 	cin.Tags = in.Tags
 	if in.GroupId != nil {
 		cin.GroupId = in.GroupId
@@ -323,7 +331,7 @@ func (s *Service) FollowUp(ctx context.Context, scope *access.ProjectScope, ref 
 	ev.ProjectId, ev.TicketId, ev.Changes = scope.Project.Id, orig.Id, []string{"links:" + LinkFollowUp}
 	ob := outbox.Event{Type: OutboxLinkAdded, ProjectId: scope.Project.Id, TicketId: orig.Id, Visibility: VisibilityAgent,
 		Actor: s.actor(scope), OccurredAt: now}
-	return s.create(ctx, scope, cin, &followUp{signed: in.Body != nil && !in.NoSignature, link: link, audit: []audit.Event{ev}, outbox: []outbox.Event{ob}, contact: contactFor(contact, hasContact)})
+	return s.create(ctx, scope, cin, &followUp{signed: in.Body != nil && !in.NoSignature, link: link, audit: []audit.Event{ev}, outbox: []outbox.Event{ob}})
 }
 
 // requireOverrides lets only staff who may edit those fields of a ticket
@@ -346,15 +354,6 @@ type followUp struct {
 	link   *Link
 	// copied also audits ticket.copied on the new ticket.
 	copied bool
-	// contact authors the first message instead of the requester.
-	contact *customers.Contact
-	audit   []audit.Event
-	outbox  []outbox.Event
-}
-
-func contactFor(c customers.Contact, ok bool) *customers.Contact {
-	if !ok {
-		return nil
-	}
-	return &c
+	audit  []audit.Event
+	outbox []outbox.Event
 }

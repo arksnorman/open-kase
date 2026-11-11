@@ -693,7 +693,7 @@ func TestBotMessagesInEmails(t *testing.T) {
 	f.drain()
 	got := sentTo(f.mail, "priya@acme.example")
 	// Requester emails carry no message content (owner decision 2026-10-31).
-	if len(got) != 1 || strings.Contains(got[0].Text+got[0].HTML, "The MX record is fixed.") || !strings.Contains(got[0].Text, "You received a response") {
+	if len(got) != 1 || strings.Contains(got[0].Text+got[0].HTML, "The MX record is fixed.") || !strings.Contains(got[0].Text, "There is a new reply") {
 		t.Fatalf("bot reply email to the requester: %+v", got)
 	}
 	if w := sentTo(f.mail, "marco@example.com"); len(w) != 1 || !strings.Contains(w[0].Text, "The MX record is fixed.") || !strings.Contains(w[0].Text, "Support bot") {

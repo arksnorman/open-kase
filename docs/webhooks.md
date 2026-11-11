@@ -81,7 +81,7 @@ recorded with the event, not from a later state.
 
 | Type | Sent when | `data` |
 | --- | --- | --- |
-| `ticket.created` | A ticket was created (by an agent or through the API) | `subject`, `priority` (1–4), `requestedPriority` (when an integration asked for one), `status` `{id, name, category}`, `group` `{id, name}`, `requestType` `{id, name}`, `source` (`web`/`api`), `requester` `{id, name, email, externalId}`, `organisation` `{id, name, externalRef}` (`null` when none), `ccEmails` (array), `createdAt`, `contactId` (only on a follow-up opened as another contact of the organisation with `contactId`: that contact's ID) |
+| `ticket.created` | A ticket was created (by an agent or through the API) | `subject`, `priority` (1–4), `requestedPriority` (when an integration asked for one), `status` `{id, name, category}`, `group` `{id, name}`, `requestType` `{id, name}`, `source` (`web`/`api`), `requester` `{id, name, email, externalId}`, `organisation` `{id, name, externalRef}` (`null` when none), `ccEmails` (array), `createdAt` |
 | `ticket.updated` | Subject, priority, request type or organisation changed | `changes` (field names), `subject`, `priority`, `requestType` `{id}`, `organisation` `{id, name, externalRef}` (`null` when none) |
 | `ticket.message.public` | A public reply was added by staff, an agent token (bot) or the requester | `subject`, `requester`, `organisation`, `ccEmails` (same shapes as `ticket.created`), `message` `{id, visibility: "public", author {context: staff\|bot\|contact, id (contact only), name}, body (raw Markdown), attachments [{id, filename, size, contentType}], createdAt}`. A file a redaction removed before the payload was built (`removeAttachments`) is `{id, removed: true}` with no other member |
 | `ticket.message.agentNote` | An agent-only note was added — **only with `includeAgentNotes`** | same shape as above with `visibility: "agent"` and the note body |
@@ -106,11 +106,14 @@ ignore events with a *lower* revision than the one they already applied, not equ
 the teammate's when the reply was posted with `contactId`. Compare it with `requester.id` to tell them
 apart. Staff and bot authors never have an `id` in webhooks.
 
-`contactId` on `ticket.statusChanged` and `ticket.created` is that same teammate for a resolve, a reply that
-moved the ticket back to Open and a follow-up. open-kase sends the requester and the CC addresses no email about a
-requester-side resolve (`by: "requester"`, `transition: "resolve"`), so a receiver that wants them told sends that
-notice itself. The reply behind a `requesterReply` change also arrives as `ticket.message.public`, so one notice
-covers both. A follow-up still gets the "received" email.
+`contactId` on `ticket.statusChanged` is that same teammate for a resolve and for a reply that
+moved the ticket back to Open. The key is absent when the requester acted. `ticket.created` never carries it:
+a follow-up opened by a teammate has the teammate as `requester`.
+
+With **Email contacts and CC addresses** on, open-kase emails the rest of the customer side about a public reply or a
+resolve made by the customer side (`by: "requester"`): the requester and the CC addresses, except the person who
+acted. With it off, a receiver that wants them told sends those notices itself. The reply behind a
+`requesterReply` change also arrives as `ticket.message.public`, so one notice covers both.
 
 ## Authenticating deliveries
 

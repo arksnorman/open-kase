@@ -151,7 +151,7 @@ client certificate, make the receiver accept both old and new values, update the
 
 Settings → Configuration → General has an **Email contacts and CC addresses** switch
 (`notifications.requesterEmails`, default on). When it is off, no email goes to requester contacts or
-CC addresses (ticket received, replies, resolved/archived notices, follow-up reminders); staff emails
+CC addresses (ticket received, replies, resolved/archived notices, follow-up reminders, including the notices about what other customer-side people did); staff emails
 are unchanged. Each suppressed email is recorded as a skipped delivery with error class
 `requesterEmailsOff`, checked at send time, so jobs queued before the switch are skipped too. While SMTP
 is disabled or unconfigured, deliveries are recorded as `smtpNotConfigured` instead, whatever the switch says. Use

@@ -2,6 +2,7 @@ package notifications
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"slices"
 	"time"
@@ -31,6 +32,8 @@ type Directory interface {
 	GroupMembers(ctx context.Context, groupID string) ([]string, error)
 	// TicketCC returns the ticket's current CC addresses.
 	TicketCC(ctx context.Context, ticketID string) ([]string, error)
+	// Contact returns a contact's address (ErrNotFound when missing).
+	Contact(ctx context.Context, projectID, id string) (ContactInfo, error)
 	ActiveEndpoints(ctx context.Context, projectID string) ([]EndpointRef, error)
 }
 
@@ -161,6 +164,13 @@ func (d *Dispatcher) Plan(ctx context.Context, ev outbox.Record) ([]Planned, err
 		}
 		if f.CC, err = d.dir.TicketCC(ctx, ev.TicketId); err != nil {
 			return nil, err
+		}
+		if id := ActingContactId(ev); id != "" {
+			c, err := d.dir.Contact(ctx, ev.ProjectId, id)
+			if err != nil && !errors.Is(err, ErrNotFound) {
+				return nil, err
+			}
+			f.ActorEmail = c.Email
 		}
 		if ev.Snapshot.GroupId != "" && needsGroup(ev) {
 			if f.GroupMembers, err = d.dir.GroupMembers(ctx, ev.Snapshot.GroupId); err != nil {

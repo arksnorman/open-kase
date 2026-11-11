@@ -521,9 +521,6 @@ func (s *Service) create(ctx context.Context, scope *access.ProjectScope, in Cre
 		msg.Author = Author{Kind: AuthorContact, Id: contact.Id, Name: contact.Name, ViaId: p.Id}
 	}
 
-	if fu != nil && fu.contact != nil && msg.Author.Kind == AuthorContact {
-		msg.Author.Id, msg.Author.Name = fu.contact.Id, fu.contact.Name
-	}
 	ev := audit.New(ctx, s.actor(scope), audit.TicketCreated, "", now)
 	ev.ProjectId = scope.Project.Id
 	ev.Changes = []string{"subject", "requester", "group", "priority", "requestType", "status"}
@@ -540,10 +537,6 @@ func (s *Service) create(ctx context.Context, scope *access.ProjectScope, in Cre
 		ev.Changes = append(ev.Changes, "attachments")
 	}
 	created := s.outboxEvent(scope, outbox.TicketCreated, "", VisibilityPublic, now)
-	if fu != nil && fu.contact != nil {
-		ev.Changes = append(ev.Changes, ContactMark+fu.contact.Id)
-		created.Changes = []string{ContactMark + fu.contact.Id}
-	}
 	cmd := CreateCommand{
 		Ticket: t, CreatedBy: s.actor(scope), Message: msg,
 		AttachmentIds: attIDs, Uploader: uploader, Audit: []audit.Event{ev}, KeepOrganisation: in.keepOrganisation,

@@ -176,7 +176,7 @@ func TestNotificationsEndToEnd(t *testing.T) {
 	f.drain()
 	// The requester is told that a response arrived, without its content.
 	if got := sentTo(f.mail, "priya@acme.example"); len(got) != 1 || strings.Contains(got[0].Text+got[0].HTML, "checking the MX records") ||
-		!strings.Contains(got[0].Text, "You received a response on ticket #1") {
+		!strings.Contains(got[0].Text, "There is a new reply on ticket #1") {
 		t.Fatalf("public reply to requester: %+v", got)
 	}
 	// Staff emails keep the reply text and the agent UI link.

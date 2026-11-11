@@ -64,21 +64,23 @@ it. Agents cannot change the organisation of a ticket your integration created.
 - **Reply as a customer:** `POST /tickets/{t}/messages { "body": "...", "visibility": "public", "as": "requester" }`.
   Add `"contactId": "<id>"` when the person replying is not the ticket's requester; the contact must belong to the
   ticket's organisation (otherwise `422 contactNotInOrganisation`, also for an unknown contact) and the message is authored under their name. A
-  customer reply reopens a resolved ticket, ends a hold and never counts as a first response. Like a requester reply, a
-  teammate reply emails nobody on the customer side: notify the others yourself from the `ticket.message.public` webhook
-  (section 5: `message.author.id`, `requester` and `ccEmails`).
+  customer reply reopens a resolved ticket, ends a hold and never counts as a first response. While **Email contacts and CC addresses** is on, open-kase emails the rest of the customer
+  side about the reply: the CC addresses when the requester wrote it, the requester and the CC addresses (except the
+  teammate's own address) when a teammate wrote it. The email never contains the message text. With the switch off, notify the others yourself (section 5).
 - **Attachments:** the token can upload with `POST /attachments` (multipart, field `file`), pass the returned IDs as `attachmentIds` when
   creating a ticket or posting a message, and download them with `GET /attachments/{a}/download`.
 - **Close:** resolve with `POST /tickets/{t}/transitions { "action": "resolve" }`. The portal token needs no `If-Match` (it sees no version). Resolving a
-  ticket also ends a hold. open-kase sends no "resolved" email to the requester or the CC addresses when the customer side resolves; the assignee and watchers are still told. Your portal knows who closed the ticket, so tell the others yourself: the CC addresses, and the requester when a teammate closed it (section 5). Resolving a ticket that is already resolved answers `200` with the ticket and changes nothing (an archived ticket is `409 ticketArchived`); the customer reopens it by replying.
+  ticket also ends a hold. While the email switch is on, open-kase emails the rest of the customer side when the customer side resolves: the CC addresses when the requester closed it, the requester and the CC addresses (except the teammate's own address) when a teammate did. The assignee and watchers are told as before. With the switch off, tell them yourself (section 5). Resolving a ticket that is already resolved answers `200` with the ticket and changes nothing (an archived ticket is `409 ticketArchived`); the customer reopens it by replying.
   Add `"contactId": "<id>"` when the person closing it is not the ticket's requester; the same rule as for replies applies (the contact must belong to the ticket's organisation, otherwise `422 contactNotInOrganisation`; any other caller gets `422 notAllowed`). The `ticket.resolved` audit event records the contact, and the `ticket.statusChanged` webhook carries it as `contactId`.
   Archiving happens automatically through auto-archive (`archiveAfterResolvedDays`, set by an admin) or by agents; archived is final, so to continue the conversation create a
-  follow-up (`POST /tickets/{t}/follow-up`). The follow-up copies the requester. With a portal token (one without `tickets:comment`) its first message is written as the requester; add `"contactId": "<id>"` to write it as another contact of the original's organisation (`422 contactNotInOrganisation` otherwise; users and tokens that write as the bot get `422 notAllowed`). The requester of the new ticket stays the original's, so the "received" email goes to the requester and the CC addresses, not to the teammate; the `ticket.created` webhook carries the teammate as `contactId`.
+  follow-up (`POST /tickets/{t}/follow-up`). The follow-up copies the requester. With a portal token (one without `tickets:comment`) its first message is written as the requester; add `"contactId": "<id>"` to open it as another contact of the original's organisation (`422 contactNotInOrganisation` otherwise; users and tokens that write as the bot get `422 notAllowed`). That contact then is the requester of the new ticket and writes its first message. The organisation stays the original's. The copied CC list drops the contact's own address; the original requester is not added to it. The "received" email goes to the new requester and the CC addresses, and the `ticket.created` webhook shows the teammate as `requester`.
 
 ## 5. Send notifications yourself (optional)
 
 By default open-kase emails requesters and CC addresses (ticket received, new reply, status changes, follow-up
-reminders). If your application sends its own emails or in-app notifications:
+reminders). It also emails the customer side about what the customer side did: a public reply or a resolve
+goes to the requester and the CC addresses, never to the person who acted. You do not need to send those notices.
+If your application prefers to send its own emails or in-app notifications, do this and turn the switch off:
 
 1. Turn off **Email contacts and CC addresses** under Settings, Configuration, General (`notifications.requesterEmails: false` in
    `PUT /settings`; an absent `requesterLinkBaseUrl` keeps the stored link). Contacts and CC addresses then get no email from open-kase; each suppressed email is listed as
@@ -92,16 +94,14 @@ reminders). If your application sends its own emails or in-app notifications:
    requester, the CC addresses and the other contacts except the author.
 3. `ticket.statusChanged` carries `by`: `"requester"` when the customer resolved the ticket with the portal token (or a
    customer reply moved it back to Open), `"staff"` for agents and staff tokens, `"automation"` for auto-resolve,
-   auto-archive and a hold that ended. When `by` is `"requester"`, open-kase emails nobody on the customer side about
-   the change, whatever the switch says:
-   - `transition: "resolve"`: this notice is yours to send. Tell the CC addresses and the other contacts, and the
-     requester too when `contactId` is present (the teammate who resolved it; the key is absent when the requester
-     did). Skip the person who acted.
+   auto-archive and a hold that ended. With the switch off, open-kase emails nobody on the
+   customer side, so for `by: "requester"` the notices are yours to send:
+   - `transition: "resolve"`: tell the CC addresses and the other contacts, and the requester too when `contactId`
+     is present (the teammate who resolved it; the key is absent when the requester did). Skip the person who acted.
    - `transition: "requesterReply"`: send nothing more. The reply itself arrives as `ticket.message.public` and the
      notice from step 2 covers it (`contactId` equals that message's `author.id` when a teammate replied).
 
-   `ticket.created` carries `contactId` the same way for a follow-up a teammate opened; while the switch is on,
-   open-kase still sends its "received" email to the requester and the CC addresses.
+   `ticket.created` never carries `contactId`: a follow-up opened by a teammate has the teammate as `requester`.
 4. Handle `ticket.followupReminder`: open-kase is waiting for the customer. `reminder` is the number of this reminder in
    the current waiting period (1 for the first). When `autoResolveNotice` is `true` this
    is the last reminder and the ticket will be resolved automatically if nobody replies; tell the customer so.

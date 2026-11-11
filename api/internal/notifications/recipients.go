@@ -1,9 +1,12 @@
 package notifications
 
 import (
+	"strings"
+
 	"github.com/arksnorman/open-kase/api/internal/access"
 	"github.com/arksnorman/open-kase/api/internal/audit"
 	"github.com/arksnorman/open-kase/api/internal/outbox"
+	"github.com/arksnorman/open-kase/api/internal/tickets"
 	"github.com/arksnorman/open-kase/api/templates"
 )
 
@@ -21,6 +24,9 @@ type Facts struct {
 	GroupMembers []string // user IDs in the ticket's current group
 	// CC are the ticket's CC addresses: copied on every requester email.
 	CC []string
+	// ActorEmail is the address of the contact who acted for the customer
+	// side (see ActingContactId); empty when unknown or not applicable.
+	ActorEmail string
 }
 
 // EmailTarget is one planned email.
@@ -43,15 +49,19 @@ func (t EmailTarget) Optional() bool {
 //   - ticket.created: requester acknowledgement (project setting) and the
 //     ticket's group queue.
 //   - public message by staff: requester, assignee, staff watchers.
-//   - public message by the requester: assignee and staff watchers; the
-//     group queue when the ticket is unassigned.
+//   - public message by the customer side (the requester or a teammate
+//     named by contactId): the rest of the customer side (requester and CC
+//     addresses, never the person who wrote it, matched by contact ID or,
+//     for CC addresses, by email ignoring case), assignee and staff
+//     watchers; the group queue when the ticket is unassigned.
 //   - agent note: link-only notice to the assignee and staff watchers;
 //     never to contacts.
 //   - claim/release/assignment: the new assignee, or the group queue when
 //     the ticket is unassigned (release, transfer).
-//   - resolve/archive: requester (not for a resolve made by the requester
-//     side); resolve/reopen/archive: assignee and
-//     watchers. Other status changes send nothing.
+//   - resolve/archive: requester; a resolve made by the requester side goes
+//     to the rest of the customer side instead (never the person who acted).
+//     resolve/reopen/archive: assignee and watchers. Other status changes
+//     send nothing (a requesterReply is covered by the reply notice).
 //   - follow-up reminder (automation): the requester only.
 //   - every email planned for the requester is also planned, with the same
 //     template, for each of the ticket's CC addresses (one delivery each).
@@ -63,6 +73,7 @@ func (t EmailTarget) Optional() bool {
 //
 // The author of a change never receives their own notification, and a
 // person is planned at most once (core reasons win over optional ones).
+// PlanEmail is pure: Facts.ActorEmail carries the one address it needs.
 func PlanEmail(f Facts) []EmailTarget {
 	ev := f.Event
 	snap := ev.Snapshot
@@ -79,20 +90,22 @@ func PlanEmail(f Facts) []EmailTarget {
 		seen["user:"+id] = true
 		out = append(out, EmailTarget{Kind: RecipientUser, Id: id, Reason: reason, Template: tpl})
 	}
-	addRequester := func(tpl templates.Kind) {
-		if snap.RequesterId == "" || seen["contact:"+snap.RequesterId] {
-			return
+	// addCustomerSide plans the requester and the CC addresses, except the
+	// contact who acted (actorId, actorEmail).
+	addCustomerSide := func(tpl templates.Kind, actorId, actorEmail string) {
+		if snap.RequesterId != "" && snap.RequesterId != actorId && !seen["contact:"+snap.RequesterId] {
+			seen["contact:"+snap.RequesterId] = true
+			out = append(out, EmailTarget{Kind: RecipientContact, Id: snap.RequesterId, Reason: ReasonRequester, Template: tpl})
 		}
-		seen["contact:"+snap.RequesterId] = true
-		out = append(out, EmailTarget{Kind: RecipientContact, Id: snap.RequesterId, Reason: ReasonRequester, Template: tpl})
 		for _, addr := range f.CC {
-			if addr == "" || seen["cc:"+addr] {
+			if addr == "" || seen["cc:"+addr] || (actorEmail != "" && strings.EqualFold(addr, actorEmail)) {
 				continue
 			}
 			seen["cc:"+addr] = true
 			out = append(out, EmailTarget{Kind: RecipientAddress, Id: addr, Reason: ReasonCC, Template: tpl})
 		}
 	}
+	addRequester := func(tpl templates.Kind) { addCustomerSide(tpl, "", "") }
 	addAll := func(ids []string, reason string, tpl templates.Kind) {
 		for _, id := range ids {
 			addUser(id, reason, tpl)
@@ -109,12 +122,8 @@ func PlanEmail(f Facts) []EmailTarget {
 		switch ev.Visibility {
 		case "public":
 			byRequester := ev.MessageAuthorKind == RecipientContact
-			if !byRequester {
-				addRequester(templates.KindPublicReply)
-			} else {
-				// The requester wrote it: suppress the self notification.
-				seen["contact:"+ev.MessageAuthorId] = true
-			}
+			// The rest of the customer side is told; the writer is not.
+			addCustomerSide(templates.KindPublicReply, ActingContactId(ev), f.ActorEmail)
 			addUser(snap.AssigneeId, ReasonAssignee, templates.KindPublicReply)
 			addAll(f.Watchers, ReasonWatcher, templates.KindPublicReply)
 			if byRequester && snap.AssigneeId == "" {
@@ -154,11 +163,9 @@ func PlanEmail(f Facts) []EmailTarget {
 	case outbox.TicketStatusChanged:
 		switch ev.Transition {
 		case outbox.TransitionResolve, outbox.TransitionArchive:
-			// A requester-side resolve is not echoed to the requester or the
-			// CC addresses: the customer side did it.
-			if ev.Transition != outbox.TransitionResolve || StatusChangedBy(ev) != "requester" {
-				addRequester(templates.KindStatusChanged)
-			}
+			// A requester-side resolve goes to the rest of the customer side,
+			// not to the person who did it.
+			addCustomerSide(templates.KindStatusChanged, ActingContactId(ev), f.ActorEmail)
 			addUser(snap.AssigneeId, ReasonAssignee, templates.KindStatusChanged)
 			addAll(f.Watchers, ReasonWatcher, templates.KindStatusChanged)
 		case outbox.TransitionReopen:
@@ -171,6 +178,29 @@ func PlanEmail(f Facts) []EmailTarget {
 		}
 	}
 	return out
+}
+
+// ActingContactId returns the contact who acted for the customer side in a
+// public message or a requester-side resolve: the message's contact author,
+// or the contact:<id> mark of the resolve (absent: the requester). It is ""
+// for every other event.
+func ActingContactId(ev outbox.Record) string {
+	switch ev.Type {
+	case outbox.MessageCreated:
+		if ev.Visibility == "public" && ev.MessageAuthorKind == RecipientContact {
+			return ev.MessageAuthorId
+		}
+	case outbox.TicketStatusChanged:
+		if ev.Transition == outbox.TransitionResolve && StatusChangedBy(ev) == "requester" {
+			for _, c := range ev.Changes {
+				if id, ok := strings.CutPrefix(c, tickets.ContactMark); ok && id != "" {
+					return id
+				}
+			}
+			return ev.Snapshot.RequesterId
+		}
+	}
+	return ""
 }
 
 // StatusChangedBy says who changed the status: "automation" (auto-resolve,

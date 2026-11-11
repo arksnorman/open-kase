@@ -143,16 +143,57 @@ func TestCCAddressesCopyRequesterEmailsOnly(t *testing.T) {
 			t.Fatalf("cc %s: %+v", a, got)
 		}
 	}
-	// No requester email, no CC: agent notes, SLA alerts, the requester's own reply.
+	// No requester email, no CC: agent notes and SLA alerts.
 	note := ev(outbox.MessageCreated, "agent", "dana", outbox.Snapshot{RequesterId: "c1", AssigneeId: "marco"})
-	own := ev(outbox.MessageCreated, "public", "", outbox.Snapshot{RequesterId: "c1", AssigneeId: "marco"})
-	own.MessageAuthorKind, own.MessageAuthorId = RecipientContact, "c1"
 	sla := ev(outbox.TicketSLABreached, "agent", "", outbox.Snapshot{RequesterId: "c1", AssigneeId: "marco"})
-	for _, e := range []outbox.Record{note, own, sla} {
+	for _, e := range []outbox.Record{note, sla} {
 		for _, tg := range PlanEmail(Facts{Event: e, CC: cc}) {
 			if tg.Kind == RecipientAddress {
 				t.Fatalf("%s/%s planned cc: %+v", e.Type, e.Visibility, tg)
 			}
+		}
+	}
+}
+
+func TestCustomerSideReplyRecipients(t *testing.T) {
+	snap := outbox.Snapshot{RequesterId: "c1", AssigneeId: "marco"}
+	cc := []string{"ops@acme.example", "Tess@Acme.example"}
+	reply := func(author string) outbox.Record {
+		return outbox.Record{Id: "e1", Type: outbox.MessageCreated, Visibility: "public", Actor: audit.Actor{Type: audit.ActorService, Id: "int1"},
+			MessageAuthorKind: RecipientContact, MessageAuthorId: author, Snapshot: snap}
+	}
+	// The requester replied: CC addresses only (not the requester).
+	got := targets(PlanEmail(Facts{Event: reply("c1"), CC: cc, ActorEmail: "req@acme.example"}))
+	if _, ok := got["contact:c1"]; ok {
+		t.Error("requester emailed about their own reply")
+	}
+	for _, a := range cc {
+		if got[RecipientAddress+":"+a].Template != templates.KindPublicReply {
+			t.Errorf("cc %s not told: %+v", a, got)
+		}
+	}
+	// A CC address equal to the requester's own email is not emailed either.
+	got = targets(PlanEmail(Facts{Event: reply("c1"), CC: []string{"REQ@acme.example", "ops@acme.example"}, ActorEmail: "req@acme.example"}))
+	if _, ok := got["address:REQ@acme.example"]; ok || len(got) != 2 {
+		t.Errorf("requester's own address in CC: %+v", got)
+	}
+	// A teammate replied: the requester and the CC addresses except the teammate's address.
+	got = targets(PlanEmail(Facts{Event: reply("c2"), CC: cc, ActorEmail: "tess@acme.example"}))
+	if got["contact:c1"].Template != templates.KindPublicReply || got["address:ops@acme.example"].Reason != ReasonCC {
+		t.Fatalf("teammate reply: %+v", got)
+	}
+	if _, ok := got["address:Tess@Acme.example"]; ok || len(got) != 3 {
+		t.Fatalf("teammate emailed about their own reply: %+v", got)
+	}
+	// Staff recipients are unchanged.
+	if got["user:marco"].Reason != ReasonAssignee {
+		t.Fatalf("assignee: %+v", got)
+	}
+	// An agent note never reaches the customer side, whoever wrote it.
+	note := ev(outbox.MessageCreated, "agent", "dana", snap)
+	for _, tg := range PlanEmail(Facts{Event: note, CC: cc}) {
+		if tg.Kind != RecipientUser {
+			t.Fatalf("agent note planned for %+v", tg)
 		}
 	}
 }
