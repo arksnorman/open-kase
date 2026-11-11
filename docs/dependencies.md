@@ -58,7 +58,7 @@ The module graph lists further modules (test-only dependencies of dependencies, 
 into the binary;
 `go list -deps ./...` is the authoritative set above.
 
-Toolchain: Go 1.27.3 (BSD-3-Clause).
+Toolchain: Go 1.27.4 (BSD-3-Clause).
 
 ## npm packages (ui/, top level)
 
@@ -103,7 +103,7 @@ dependencies are pinned in `ui/package-lock.json` and not listed here.
 | mongosh | 2.12.0 | Apache-2.0 |
 | Redis (Ubuntu 24.04 package on the dev host) | 7.0.15 | BSD-3-Clause |
 | Redis image (Docker Compose) | 8.2.2-alpine | RSALv2 / SSPLv1 / AGPLv3 (tri-license; run unmodified as a service) |
-| Base images | `golang:1.27.3-trixie` (build), `gcr.io/distroless/static-debian13:nonroot`, `node:24.21.0-alpine` (build) | various (Debian/Alpine) |
+| Base images | `golang:1.27.4-trixie` (build), `gcr.io/distroless/static-debian13:nonroot`, `node:24.21.0-alpine` (build) | various (Debian/Alpine) |
 
 The SPDX identifiers above were detected automatically; check the upstream LICENSE files before relying on them
 for a compliance decision.

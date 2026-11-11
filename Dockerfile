@@ -14,7 +14,7 @@ COPY ui/ ./
 RUN npm run build
 
 # ---- API binary ----
-FROM --platform=$BUILDPLATFORM golang:1.27.3-trixie AS api
+FROM --platform=$BUILDPLATFORM golang:1.27.4-trixie AS api
 WORKDIR /src
 COPY api/go.mod api/go.sum ./
 RUN go mod download && go mod verify
