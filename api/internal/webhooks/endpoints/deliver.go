@@ -6,10 +6,11 @@ import (
 	"errors"
 	"net/url"
 	"slices"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/arksnorman/open-kase/api/internal/access"
-	"github.com/arksnorman/open-kase/api/internal/audit"
 	"github.com/arksnorman/open-kase/api/internal/jobs"
 	"github.com/arksnorman/open-kase/api/internal/notifications"
 	"github.com/arksnorman/open-kase/api/internal/outbox"
@@ -365,12 +366,19 @@ func (w *Deliverer) build(ctx context.Context, ep Endpoint, typ, eventID string)
 			}
 		}
 	case webhooks.TypeTicketStatusChanged:
-		data["status"], data["transition"], data["by"] = status, ev.Transition, statusChangedBy(ev)
+		data["status"], data["transition"], data["by"] = status, ev.Transition, notifications.StatusChangedBy(ev)
 		if err := w.addRequesterContext(ctx, data, t, snap); err != nil {
 			return nil, err
 		}
 	case webhooks.TypeFollowupReminder:
 		data["autoResolveNotice"] = slices.Contains(ev.Changes, tickets.ReminderMarkAutoResolve)
+		for _, c := range ev.Changes {
+			if num, ok := strings.CutPrefix(c, tickets.ReminderMarkNumber); ok {
+				if n, err := strconv.Atoi(num); err == nil && n > 0 {
+					data["reminder"] = n
+				}
+			}
+		}
 		if err := w.addRequesterContext(ctx, data, t, snap); err != nil {
 			return nil, err
 		}
@@ -443,19 +451,4 @@ func (w *Deliverer) organisationPayload(ctx context.Context, t tickets.Ticket, s
 	}
 	out["name"], out["externalRef"] = o.Name, optString(o.ExternalRef)
 	return out, nil
-}
-
-// statusChangedBy says who changed the status: "automation" (auto-resolve,
-// auto-archive, hold ended), "requester" (a requester-side token: a resolve,
-// or a reply that reopened the ticket) or "staff" (a user or a staff token).
-// It is derived from the event's actor and the scopes that allowed the action.
-func statusChangedBy(ev outbox.Record) string {
-	switch {
-	case ev.Actor.Type == audit.ActorSystem:
-		return "automation"
-	case ev.Transition == outbox.TransitionRequesterReply,
-		ev.Actor.Type == audit.ActorService && len(ev.Actor.Scopes) > 0 && !access.StaffScopes(ev.Actor.Scopes):
-		return "requester"
-	}
-	return "staff"
 }

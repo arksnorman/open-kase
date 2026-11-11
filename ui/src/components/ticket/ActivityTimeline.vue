@@ -84,7 +84,7 @@ function phrase(i: ActivityItem): string {
     case 'ticket.statusChanged':
       return 'changed the status'
     case 'ticket.resolved':
-      return 'resolved the ticket'
+      return i.changes.some((c) => c.startsWith('contact:')) ? 'resolved the ticket on behalf of a contact' : 'resolved the ticket'
     case 'ticket.reopened':
       return 'reopened the ticket'
     case 'ticket.archived':
@@ -120,7 +120,7 @@ function phrase(i: ActivityItem): string {
 function changeList(i: ActivityItem): string {
   if (i.action === 'ticket.created' || i.action.startsWith('message.') || i.action.startsWith('ticket.link_')) return ''
   if (i.action === 'ticket.followupReminderSent') return ''
-  const labels = [...new Set(i.changes.filter((c) => !c.startsWith('visibility:') && !c.startsWith('links:')).map(fieldLabel))]
+  const labels = [...new Set(i.changes.filter((c) => !c.startsWith('visibility:') && !c.startsWith('links:') && !c.startsWith('contact:')).map(fieldLabel))]
   return labels.join(', ')
 }
 

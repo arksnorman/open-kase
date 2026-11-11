@@ -93,6 +93,7 @@ type followUpRequest struct {
 	GroupId       *string  `json:"groupId" doc:"Defaults to the original's group (Triage when inactive)."`
 	RequestTypeId *string  `json:"requestTypeId" doc:"Defaults to the original's request type."`
 	Tags          []string `json:"tags" doc:"Catalog tags for the follow-up (none by default)."`
+	ContactId     string   `json:"contactId" doc:"Only when the first message is written as the requester (a token without tickets:comment): author it as this contact of the original's organisation (contactNotInOrganisation otherwise). The new ticket's requester stays the original's. Users and tokens that write as the bot: 422 notAllowed."`
 }
 
 func (a *api) createFollowUp(c *gin.Context) {
@@ -106,7 +107,7 @@ func (a *api) createFollowUp(c *gin.Context) {
 	}
 	t, err := a.Tickets.FollowUp(c.Request.Context(), s, c.Param("t"), tickets.FollowUpInput{Subject: body.Subject, Body: body.Body, Priority: body.Priority,
 		GroupId: body.GroupId, RequestTypeId: body.RequestTypeId, Tags: body.Tags,
-		NoSignature: body.AddSignature != nil && !*body.AddSignature})
+		NoSignature: body.AddSignature != nil && !*body.AddSignature, ContactId: body.ContactId})
 	if err == nil {
 		c.Header("Location", "/api/v1/tickets/"+strconv.FormatInt(t.Number, 10))
 	}

@@ -70,8 +70,10 @@ it. Agents cannot change the organisation of a ticket your integration created.
 - **Attachments:** the token can upload with `POST /attachments` (multipart, field `file`), pass the returned IDs as `attachmentIds` when
   creating a ticket or posting a message, and download them with `GET /attachments/{a}/download`.
 - **Close:** resolve with `POST /tickets/{t}/transitions { "action": "resolve" }`. The portal token needs no `If-Match` (it sees no version). Resolving a
-  ticket also ends a hold, and open-kase sends its usual "resolved" notice to the requester and CC addresses unless requester emails are off. Resolving a ticket that is already resolved is `409 invalidTransition`; the customer reopens it by replying. Archiving happens automatically through auto-archive (`archiveAfterResolvedDays`, set by an admin) or by agents; archived is final, so to continue the conversation create a
-  follow-up (`POST /tickets/{t}/follow-up`).
+  ticket also ends a hold. open-kase sends no "resolved" notice to the requester or the CC addresses when the customer side resolves: they did it themselves. Assignee and watchers are still told. Resolving a ticket that is already resolved answers `200` with the ticket and changes nothing (an archived ticket is `409 ticketArchived`); the customer reopens it by replying.
+  Add `"contactId": "<id>"` when the person closing it is not the ticket's requester; the same rule as for replies applies (the contact must belong to the ticket's organisation, otherwise `422 contactNotInOrganisation`; any other caller gets `422 notAllowed`). The `ticket.resolved` audit event records the contact; the webhook payload is unchanged.
+  Archiving happens automatically through auto-archive (`archiveAfterResolvedDays`, set by an admin) or by agents; archived is final, so to continue the conversation create a
+  follow-up (`POST /tickets/{t}/follow-up`). The follow-up copies the requester. With a portal token (one without `tickets:comment`) its first message is written as the requester; add `"contactId": "<id>"` to write it as another contact of the original's organisation (`422 contactNotInOrganisation` otherwise; users and tokens that write as the bot get `422 notAllowed`). The requester of the new ticket stays the original's.
 
 ## 5. Send notifications yourself (optional)
 
@@ -91,7 +93,8 @@ reminders). If your application sends its own emails or in-app notifications:
 3. `ticket.statusChanged` carries `by`: `"requester"` when the customer resolved the ticket with the portal token (or a
    reply reopened it), `"staff"` for agents and staff tokens, `"automation"` for auto-resolve, auto-archive and a
    hold that ended. Skip notifying the customer when `by` is `"requester"`: they just did it themselves.
-4. Handle `ticket.followupReminder`: open-kase is waiting for the customer. When `autoResolveNotice` is `true` this
+4. Handle `ticket.followupReminder`: open-kase is waiting for the customer. `reminder` is the number of this reminder in
+   the current waiting period (1 for the first). When `autoResolveNotice` is `true` this
    is the last reminder and the ticket will be resolved automatically if nobody replies; tell the customer so.
 
 Delivery is at least once: de-duplicate on `eventId` and use `ticket.revision` to ignore events with a *lower* revision (follow-up reminders do not advance it). See

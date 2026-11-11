@@ -143,6 +143,11 @@ type ticketsListIn struct {
 	StatusId       string `json:"statusId,omitempty" jsonschema:"Comma-separated status IDs (also for requester-side tokens)."`
 	OrganisationId string `json:"organisationId,omitempty" jsonschema:"Comma-separated organisation IDs (also for requester-side tokens)."`
 	RequesterId    string `json:"requesterId,omitempty" jsonschema:"A contact ID: only that contact's tickets (also for requester-side tokens)."`
+	Assignee       string `json:"assignee,omitempty" jsonschema:"Users and staff tokens: me, unassigned or a user ID. Requester-side tokens: 403 userRequired."`
+	Priority       string `json:"priority,omitempty" jsonschema:"Users and staff tokens: comma-separated priorities 1-4."`
+	Tag            string `json:"tag,omitempty" jsonschema:"Users and staff tokens: comma-separated catalog tags."`
+	RequestTypeId  string `json:"requestTypeId,omitempty" jsonschema:"Users and staff tokens: comma-separated request type IDs."`
+	Due            string `json:"due,omitempty" jsonschema:"Users and staff tokens: SLA filter: dueSoon, breached, met, missed or running."`
 	pageArgs
 }
 
@@ -187,6 +192,7 @@ type ticketsFollowUpIn struct {
 	GroupId        string   `json:"groupId,omitempty" jsonschema:"Defaults to the original's group."`
 	RequestTypeId  string   `json:"requestTypeId,omitempty" jsonschema:"Defaults to the original's request type."`
 	Tags           []string `json:"tags,omitempty" jsonschema:"Catalog tags for the follow-up (none by default)."`
+	ContactId      string   `json:"contactId,omitempty" jsonschema:"Only when the first message is written as the requester (a token without tickets:comment): author it as this contact of the original's organisation (422 contactNotInOrganisation otherwise). The new ticket's requester stays the original's. Otherwise 422 notAllowed."`
 	IdempotencyKey string   `json:"idempotencyKey,omitempty" jsonschema:"Optional key (1-200 printable ASCII); a retry with the same key and arguments returns the first ticket."`
 }
 
@@ -322,6 +328,7 @@ type ticketsTransitionIn struct {
 	Reason       string `json:"reason,omitempty" jsonschema:"Optional reason recorded in the audit history."`
 	HoldReasonId string `json:"holdReasonId,omitempty" jsonschema:"Required with hold: a hold reason ID from holdReasonsList. The ticket returns to Open after the reason's maxDays."`
 	Note         string `json:"note,omitempty" jsonschema:"Only with hold: an optional internal note saved with the hold (needs tickets:internal for tokens)."`
+	ContactId    string `json:"contactId,omitempty" jsonschema:"Only with resolve by a requester-side token: the contact of the ticket's organisation who resolved it (422 contactNotInOrganisation otherwise). Any other caller: 422 notAllowed."`
 	mutationArgs
 }
 
@@ -447,12 +454,9 @@ func (h *Handler) list(ctx context.Context, c *call, in tickets.ListInput, pg pa
 }
 
 func (h *Handler) ticketsList(ctx context.Context, c *call, in ticketsListIn) (any, error) {
-	var f tickets.Filter
-	f.StatusIds, f.OrganisationIds, f.RequesterId = splitIds(in.StatusId), splitIds(in.OrganisationId), strings.TrimSpace(in.RequesterId)
-	li := tickets.ListInput{View: in.View, Q: in.Q, GroupId: in.GroupId}
-	if !f.Empty() {
-		li.Filter = &f
-	}
+	params := map[string]string{"statusId": in.StatusId, "organisationId": in.OrganisationId, "requesterId": in.RequesterId,
+		"assignee": in.Assignee, "priority": in.Priority, "tag": in.Tag, "requestTypeId": in.RequestTypeId, "due": in.Due}
+	li := tickets.ListInput{View: in.View, Q: in.Q, GroupId: in.GroupId, Filter: transporthttp.ListFilter(func(name string) string { return params[name] })}
 	return h.list(ctx, c, li, in.pageArgs)
 }
 
@@ -599,7 +603,7 @@ func (h *Handler) ticketsFollowUp(ctx context.Context, c *call, in ticketsFollow
 		}
 		out, err := h.d.Tickets.FollowUp(ctx, s, t.Id, tickets.FollowUpInput{Subject: optional(in.Subject), Body: optional(in.Body), Priority: prio,
 			GroupId: optional(in.GroupId), RequestTypeId: optional(in.RequestTypeId), Tags: in.Tags,
-			NoSignature: in.AddSignature != nil && !*in.AddSignature})
+			NoSignature: in.AddSignature != nil && !*in.AddSignature, ContactId: in.ContactId})
 		if err != nil {
 			return nil, err
 		}
@@ -1018,7 +1022,7 @@ func (h *Handler) ticketsTransition(ctx context.Context, c *call, in ticketsTran
 	}
 	return h.idempotent(ctx, c, ToolTicketsTransition, in.IdempotencyKey, in, h.recheckTicket(c, in.Ticket), func(ctx context.Context) (any, error) {
 		out, err := h.d.Tickets.Transition(ctx, s, t.Id, expected(t, in.ExpectedVersion),
-			tickets.TransitionInput{Action: in.Action, StatusId: optional(in.StatusId), Reason: in.Reason, HoldReasonId: in.HoldReasonId, Note: in.Note})
+			tickets.TransitionInput{Action: in.Action, StatusId: optional(in.StatusId), Reason: in.Reason, HoldReasonId: in.HoldReasonId, Note: in.Note, ContactId: in.ContactId})
 		if err != nil {
 			return nil, err
 		}

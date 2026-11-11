@@ -157,6 +157,9 @@ func TestFollowupReminderWebhook(t *testing.T) {
 		if d["autoResolveNotice"] != want {
 			t.Fatalf("reminder %d autoResolveNotice: %v", i+1, d)
 		}
+		if d["reminder"] != float64(i+1) {
+			t.Fatalf("reminder %d number: %v", i+1, d["reminder"])
+		}
 		if obj(d, "requester")["email"] != "priya@acme.example" || d["subject"] != "Waiting one" {
 			t.Fatalf("reminder payload: %v", d)
 		}

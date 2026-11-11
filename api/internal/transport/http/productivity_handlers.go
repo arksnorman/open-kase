@@ -188,11 +188,15 @@ func (a *api) deleteTag(c *gin.Context) {
 
 // ---- List filters ----
 
-// listFilter parses the ad-hoc list filters (comma-separated values).
-// It returns nil when none is present.
-func listFilter(c *gin.Context) *tickets.Filter {
+// listFilter parses the ad-hoc list filters of a request.
+func listFilter(c *gin.Context) *tickets.Filter { return ListFilter(c.Query) }
+
+// ListFilter parses the ad-hoc list filters (comma-separated values) from
+// a lookup of named parameters: the REST query string and the MCP
+// ticketsList arguments share it. It returns nil when none is present.
+func ListFilter(param func(name string) string) *tickets.Filter {
 	split := func(name string) []string {
-		raw := strings.TrimSpace(c.Query(name))
+		raw := strings.TrimSpace(param(name))
 		if raw == "" {
 			return nil
 		}
@@ -202,8 +206,8 @@ func listFilter(c *gin.Context) *tickets.Filter {
 		}
 		return parts
 	}
-	f := tickets.Filter{Assignee: c.Query("assignee"), StatusIds: split("statusId"), Tags: split("tag"),
-		RequestTypeIds: split("requestTypeId"), OrganisationIds: split("organisationId"), RequesterId: strings.TrimSpace(c.Query("requesterId")), Due: c.Query("due")}
+	f := tickets.Filter{Assignee: param("assignee"), StatusIds: split("statusId"), Tags: split("tag"),
+		RequestTypeIds: split("requestTypeId"), OrganisationIds: split("organisationId"), RequesterId: strings.TrimSpace(param("requesterId")), Due: param("due")}
 	for _, p := range split("priority") {
 		n, err := strconv.Atoi(p)
 		if err != nil {

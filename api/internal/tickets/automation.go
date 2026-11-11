@@ -3,6 +3,7 @@ package tickets
 import (
 	"context"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/arksnorman/open-kase/api/internal/audit"
@@ -19,6 +20,10 @@ const OutboxFollowupReminder = outbox.TicketFollowupReminder
 // ReminderMarkAutoResolve is recorded in a reminder event's changes when
 // the project will auto-resolve the ticket if the requester stays silent.
 const ReminderMarkAutoResolve = "autoResolveNotice"
+
+// ReminderMarkNumber prefixes the reminder's number (1-based, within the
+// current waiting period) in a reminder event's changes: "reminder:2".
+const ReminderMarkNumber = "reminder:"
 
 // automationActor is the audit/outbox actor of lifecycle automation.
 var automationActor = audit.System(audit.SystemAutomation, "lifecycle automation")
@@ -62,8 +67,9 @@ func (s *Service) RemindRequester(ctx context.Context, t Ticket, gen int64, n in
 	ev.ProjectId, ev.TicketId, ev.Changes = t.ProjectId, t.Id, []string{"automation.reminders"}
 	ob := outbox.Event{Type: OutboxFollowupReminder, ProjectId: t.ProjectId, TicketId: t.Id, Visibility: VisibilityPublic,
 		Actor: automationActor, OccurredAt: now}
+	ob.Changes = []string{ReminderMarkNumber + strconv.Itoa(n+1)}
 	if autoResolveNotice {
-		ob.Changes = []string{ReminderMarkAutoResolve}
+		ob.Changes = append(ob.Changes, ReminderMarkAutoResolve)
 	}
 	ok, err := s.repo.RemindRequester(ctx, ReminderCommand{ProjectId: t.ProjectId, TicketId: t.Id, Generation: gen, Reminders: n,
 		Notice: autoResolveNotice, At: now, Audit: []audit.Event{ev}, Outbox: []outbox.Event{ob}})

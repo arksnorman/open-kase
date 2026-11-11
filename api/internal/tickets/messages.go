@@ -3,6 +3,7 @@ package tickets
 import (
 	"context"
 	"errors"
+	"github.com/arksnorman/open-kase/api/internal/customers"
 	"slices"
 
 	"github.com/arksnorman/open-kase/api/internal/access"
@@ -355,16 +356,11 @@ func (s *Service) postMessage(ctx context.Context, scope *access.ProjectScope, r
 			}
 		} else {
 			msg.Author = Author{Kind: AuthorContact, Id: t.Requester.Id, Name: t.Requester.Name, ViaId: p.Id}
-			if in.ContactId != "" && in.ContactId != t.Requester.Id {
-				c, err := s.requesters.OrganisationContact(ctx, scope, in.ContactId)
-				if err != nil {
-					return PostResult{}, err
-				}
-				if t.Organisation == nil || c.OrganisationId != t.Organisation.Id {
-					return PostResult{}, errContactNotInOrganisation()
-				}
+			if c, ok, err := s.organisationContact(ctx, scope, t, in.ContactId); err != nil {
+				return PostResult{}, err
+			} else if ok {
 				msg.Author.Id, msg.Author.Name = c.Id, c.Name
-				contactChange = "contact:" + c.Id
+				contactChange = ContactMark + c.Id
 			}
 			eligible := false
 			if t.Assignee != nil {
@@ -511,6 +507,27 @@ func (s *Service) DeleteDraft(ctx context.Context, scope *access.ProjectScope, r
 		return err
 	}
 	return s.repo.DeleteDraft(ctx, t.Id, scope.Principal.Id, visibility)
+}
+
+// ContactMark prefixes the audit change that names the contact who acted for
+// the customer side (a reply, a resolve or a follow-up).
+const ContactMark = "contact:"
+
+// organisationContact checks a contactId against the ticket's organisation.
+// ok is false when there is no contact to apply: the id is empty or is the
+// ticket's own requester. Any other id must be a contact of the ticket's
+// organisation, otherwise the error is contactNotInOrganisation.
+func (s *Service) organisationContact(ctx context.Context, scope *access.ProjectScope, t Ticket, contactId string) (c customers.Contact, ok bool, err error) {
+	if contactId == "" || contactId == t.Requester.Id {
+		return c, false, nil
+	}
+	if c, err = s.requesters.OrganisationContact(ctx, scope, contactId); err != nil {
+		return c, false, err
+	}
+	if t.Organisation == nil || c.OrganisationId != t.Organisation.Id {
+		return c, false, errContactNotInOrganisation()
+	}
+	return c, true, nil
 }
 
 func errContactNotInOrganisation() error {

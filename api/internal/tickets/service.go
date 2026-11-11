@@ -376,6 +376,14 @@ func (s *Service) Create(ctx context.Context, scope *access.ProjectScope, in Cre
 	return s.create(ctx, scope, in, nil)
 }
 
+// authorsAsRequester reports whether the first message of a ticket created
+// by this principal is the requester's: the requester side always, and a
+// staff token without tickets:comment (it does not speak as a bot).
+func authorsAsRequester(scope *access.ProjectScope) bool {
+	p := scope.Principal
+	return !p.IsStaff() || !(p.IsUser() || scope.Can(access.CapTicketReplyPublic))
+}
+
 func (s *Service) create(ctx context.Context, scope *access.ProjectScope, in CreateInput, fu *followUp) (Ticket, error) {
 	if err := scope.Require(access.CapTicketCreate); err != nil {
 		return Ticket{}, err
@@ -496,7 +504,7 @@ func (s *Service) create(ctx context.Context, scope *access.ProjectScope, in Cre
 		if in.Priority != nil {
 			t.Priority = *in.Priority
 		}
-		if p.IsUser() || scope.Can(access.CapTicketReplyPublic) {
+		if !authorsAsRequester(scope) {
 			msg.Author = staffAuthor(p)
 		} else {
 			// A staff token without tickets:comment does not speak as a
@@ -513,6 +521,9 @@ func (s *Service) create(ctx context.Context, scope *access.ProjectScope, in Cre
 		msg.Author = Author{Kind: AuthorContact, Id: contact.Id, Name: contact.Name, ViaId: p.Id}
 	}
 
+	if fu != nil && fu.contact != nil && msg.Author.Kind == AuthorContact {
+		msg.Author.Id, msg.Author.Name = fu.contact.Id, fu.contact.Name
+	}
 	ev := audit.New(ctx, s.actor(scope), audit.TicketCreated, "", now)
 	ev.ProjectId = scope.Project.Id
 	ev.Changes = []string{"subject", "requester", "group", "priority", "requestType", "status"}
@@ -527,6 +538,9 @@ func (s *Service) create(ctx context.Context, scope *access.ProjectScope, in Cre
 	}
 	if len(attIDs) > 0 {
 		ev.Changes = append(ev.Changes, "attachments")
+	}
+	if fu != nil && fu.contact != nil {
+		ev.Changes = append(ev.Changes, ContactMark+fu.contact.Id)
 	}
 	cmd := CreateCommand{
 		Ticket: t, CreatedBy: s.actor(scope), Message: msg,
@@ -1267,6 +1281,9 @@ type TransitionInput struct {
 	// internal note saved with the hold.
 	HoldReasonId string
 	Note         string
+	// ContactId names the contact of the ticket's organisation who resolved
+	// it. Only a requester-side resolve accepts it.
+	ContactId string
 }
 
 // Transition resolves, reopens, archives, puts on hold or sets a workable
@@ -1290,6 +1307,9 @@ func (s *Service) Transition(ctx context.Context, scope *access.ProjectScope, re
 		}
 		if err := scope.Require(access.CapTicketTransition); err != nil {
 			return Ticket{}, err
+		}
+		if in.ContactId != "" {
+			return Ticket{}, fault.Field("contactId", "notAllowed", "contactId is only valid for a resolve made by the requester side.")
 		}
 	}
 	// A requester-side resolve has no version of its own: when staff change
@@ -1323,6 +1343,9 @@ func (s *Service) transition(ctx context.Context, scope *access.ProjectScope, re
 	case in.HoldReasonId != "":
 		v.Add("holdReasonId", "notAllowed", "holdReasonId is only accepted with hold.")
 	}
+	if in.ContactId != "" {
+		v.String(validation.ObjectID, "contactId", in.ContactId)
+	}
 	in.Note = strings.TrimSpace(in.Note)
 	switch {
 	case in.Note != "" && in.Action != "hold":
@@ -1340,8 +1363,20 @@ func (s *Service) transition(ctx context.Context, scope *access.ProjectScope, re
 	if t.Archived() {
 		return Ticket{}, archivedErr(scope, t)
 	}
+	var contactChanges []string
 	if requesterResolve {
 		expectedVersion = t.Version
+		c, ok, err := s.organisationContact(ctx, scope, t, in.ContactId)
+		if err != nil {
+			return Ticket{}, err
+		}
+		if ok {
+			contactChanges = []string{ContactMark + c.Id}
+		}
+		if t.StatusCategory == statuses.CategoryResolved {
+			// Resolving again changes nothing and is not an error.
+			return s.present(scope, t), nil
+		}
 	}
 	if t.Version != expectedVersion {
 		return Ticket{}, errVersion()
@@ -1408,7 +1443,7 @@ func (s *Service) transition(ctx context.Context, scope *access.ProjectScope, re
 		m.SLA = slaFor(func(c *sla.Instance) { c.Archive(now) })
 	}
 	ev := s.event(ctx, scope, t, map[string]audit.Action{"resolve": audit.TicketResolved, "reopen": audit.TicketReopened,
-		"archive": audit.TicketArchived, "hold": audit.TicketHeld, "setStatus": audit.TicketStatusChanged}[in.Action], now, changed...)
+		"archive": audit.TicketArchived, "hold": audit.TicketHeld, "setStatus": audit.TicketStatusChanged}[in.Action], now, append(changed, contactChanges...)...)
 	ev.Reason = in.Reason
 	if in.Action == "hold" {
 		ev.Reason = holdReason.Name

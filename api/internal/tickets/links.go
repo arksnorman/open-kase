@@ -7,6 +7,7 @@ import (
 
 	"github.com/arksnorman/open-kase/api/internal/access"
 	"github.com/arksnorman/open-kase/api/internal/audit"
+	"github.com/arksnorman/open-kase/api/internal/customers"
 	"github.com/arksnorman/open-kase/api/internal/outbox"
 	"github.com/arksnorman/open-kase/api/package/fault"
 	"github.com/arksnorman/open-kase/api/package/validation"
@@ -254,6 +255,10 @@ type FollowUpInput struct {
 	Tags          []string
 	// NoSignature skips the author's signatures on the first message.
 	NoSignature bool
+	// ContactId authors the first message as another contact of the
+	// original's organisation. Only when the message is authored as the
+	// requester; the new ticket's requester stays the original's.
+	ContactId string
 }
 
 // FollowUp creates a new ticket linked followUpTo the original (which
@@ -269,7 +274,21 @@ func (s *Service) FollowUp(ctx context.Context, scope *access.ProjectScope, ref 
 	if err := requireOverrides(scope, in.GroupId, in.RequestTypeId, len(in.Tags) > 0); err != nil {
 		return Ticket{}, err
 	}
+	if in.ContactId != "" {
+		var v validation.Collector
+		v.String(validation.ObjectID, "contactId", in.ContactId)
+		if err := v.Err(); err != nil {
+			return Ticket{}, err
+		}
+		if !authorsAsRequester(scope) {
+			return Ticket{}, fault.Field("contactId", "notAllowed", "contactId is only valid when the first message is written as the requester.")
+		}
+	}
 	orig, err := s.load(ctx, scope, ref)
+	if err != nil {
+		return Ticket{}, err
+	}
+	contact, hasContact, err := s.organisationContact(ctx, scope, orig, in.ContactId)
 	if err != nil {
 		return Ticket{}, err
 	}
@@ -304,7 +323,7 @@ func (s *Service) FollowUp(ctx context.Context, scope *access.ProjectScope, ref 
 	ev.ProjectId, ev.TicketId, ev.Changes = scope.Project.Id, orig.Id, []string{"links:" + LinkFollowUp}
 	ob := outbox.Event{Type: OutboxLinkAdded, ProjectId: scope.Project.Id, TicketId: orig.Id, Visibility: VisibilityAgent,
 		Actor: s.actor(scope), OccurredAt: now}
-	return s.create(ctx, scope, cin, &followUp{signed: in.Body != nil && !in.NoSignature, link: link, audit: []audit.Event{ev}, outbox: []outbox.Event{ob}})
+	return s.create(ctx, scope, cin, &followUp{signed: in.Body != nil && !in.NoSignature, link: link, audit: []audit.Event{ev}, outbox: []outbox.Event{ob}, contact: contactFor(contact, hasContact)})
 }
 
 // requireOverrides lets only staff who may edit those fields of a ticket
@@ -327,6 +346,15 @@ type followUp struct {
 	link   *Link
 	// copied also audits ticket.copied on the new ticket.
 	copied bool
-	audit  []audit.Event
-	outbox []outbox.Event
+	// contact authors the first message instead of the requester.
+	contact *customers.Contact
+	audit   []audit.Event
+	outbox  []outbox.Event
+}
+
+func contactFor(c customers.Contact, ok bool) *customers.Contact {
+	if !ok {
+		return nil
+	}
+	return &c
 }

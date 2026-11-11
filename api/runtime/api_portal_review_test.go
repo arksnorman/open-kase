@@ -323,8 +323,26 @@ func TestRequesterSideResolve(t *testing.T) {
 	if got := obj(f.get(f.admin.Access, key).expect(200).JSON(), "status")["name"]; got != "Resolved" {
 		t.Fatalf("status %v", got)
 	}
-	// An If-Match is ignored; resolving again is invalidTransition.
-	f.do("POST", tpath(key, "/transitions"), map[string]any{"action": "resolve"}, bearer(tok), ifMatchV(99)).expect(409, "invalidTransition")
+	// An If-Match is ignored; resolving again answers 200 and writes nothing.
+	v := f.version(key)
+	resolvedEvents := func() int {
+		n := 0
+		for _, ev := range f.tokenAudit(tokID) {
+			if ev.Action == "ticket.resolved" {
+				n++
+			}
+		}
+		return n
+	}
+	before := resolvedEvents()
+	if r := f.do("POST", tpath(key, "/transitions"), map[string]any{"action": "resolve"}, bearer(tok), ifMatchV(99)).expect(200).JSON(); obj(r, "status")["name"] != "Resolved" {
+		t.Fatalf("repeated resolve: %v", r)
+	}
+	if f.version(key) != v || resolvedEvents() != before {
+		t.Fatalf("repeated resolve wrote: version %d -> %d, audit %d -> %d", v, f.version(key), before, resolvedEvents())
+	}
+	// Staff resolving a resolved ticket is still invalidTransition.
+	f.do("POST", tpath(key, "/transitions"), map[string]any{"action": "resolve"}, bearer(f.dana.Access), ifMatchV(v)).expect(409, "invalidTransition")
 	f.do("POST", tpath(key, "/transitions"), map[string]any{"action": "archive"}, bearer(tok)).expect(403, "userRequired")
 
 	// Audited with the token as actor; statusChanged webhook with transition resolve.

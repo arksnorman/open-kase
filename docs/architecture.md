@@ -207,7 +207,7 @@ projects with subscribers; each stream authorizes every change for its own princ
 - Public reply by the requester: assignee and watchers; the group queue if unassigned.
 - Agent note: a link-only notice to the assignee and staff watchers; never to contacts or CC addresses.
 - Claim, release, assignment: the new assignee, or the group when unassigned.
-- Resolve or archive: requester; resolve, reopen, archive: assignee and watchers.
+- Resolve or archive: requester (plus CC addresses), except for a resolve made by the requester side; resolve, reopen, archive: assignee and watchers.
 - Follow-up reminder: requester. Scheduled message held for review or cancelled: its author.
 - SLA warning and breach: assignee and group (staff only). Hold ended: the assignee only.
 - Every email to the requester is repeated, one delivery each, to the ticket's CC addresses.

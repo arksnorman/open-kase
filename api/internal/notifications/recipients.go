@@ -1,6 +1,7 @@
 package notifications
 
 import (
+	"github.com/arksnorman/open-kase/api/internal/access"
 	"github.com/arksnorman/open-kase/api/internal/audit"
 	"github.com/arksnorman/open-kase/api/internal/outbox"
 	"github.com/arksnorman/open-kase/api/templates"
@@ -48,7 +49,8 @@ func (t EmailTarget) Optional() bool {
 //     never to contacts.
 //   - claim/release/assignment: the new assignee, or the group queue when
 //     the ticket is unassigned (release, transfer).
-//   - resolve/archive: requester; resolve/reopen/archive: assignee and
+//   - resolve/archive: requester (not for a resolve made by the requester
+//     side); resolve/reopen/archive: assignee and
 //     watchers. Other status changes send nothing.
 //   - follow-up reminder (automation): the requester only.
 //   - every email planned for the requester is also planned, with the same
@@ -152,7 +154,11 @@ func PlanEmail(f Facts) []EmailTarget {
 	case outbox.TicketStatusChanged:
 		switch ev.Transition {
 		case outbox.TransitionResolve, outbox.TransitionArchive:
-			addRequester(templates.KindStatusChanged)
+			// A requester-side resolve is not echoed to the requester or the
+			// CC addresses: the customer side did it.
+			if ev.Transition != outbox.TransitionResolve || StatusChangedBy(ev) != "requester" {
+				addRequester(templates.KindStatusChanged)
+			}
 			addUser(snap.AssigneeId, ReasonAssignee, templates.KindStatusChanged)
 			addAll(f.Watchers, ReasonWatcher, templates.KindStatusChanged)
 		case outbox.TransitionReopen:
@@ -165,4 +171,19 @@ func PlanEmail(f Facts) []EmailTarget {
 		}
 	}
 	return out
+}
+
+// StatusChangedBy says who changed the status: "automation" (auto-resolve,
+// auto-archive, hold ended), "requester" (a requester-side token: a resolve,
+// or a reply that reopened the ticket) or "staff" (a user or a staff token).
+// It is derived from the event's actor and the scopes that allowed the action.
+func StatusChangedBy(ev outbox.Record) string {
+	switch {
+	case ev.Actor.Type == audit.ActorSystem:
+		return "automation"
+	case ev.Transition == outbox.TransitionRequesterReply,
+		ev.Actor.Type == audit.ActorService && len(ev.Actor.Scopes) > 0 && !access.StaffScopes(ev.Actor.Scopes):
+		return "requester"
+	}
+	return "staff"
 }
