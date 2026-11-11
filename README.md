@@ -57,7 +57,7 @@ a high-availability setup.
 | REST API | [`docs/api-contract-v1.md`](docs/api-contract-v1.md), [`docs/openapi.json`](docs/openapi.json) (also served at `/api/v1/openapi.json`) |
 | MCP and webhooks | [`docs/mcp.md`](docs/mcp.md), [`docs/webhooks.md`](docs/webhooks.md) |
 | Customer portal integration | [`docs/customer-portal.md`](docs/customer-portal.md) |
-| Architecture and decisions | [`docs/architecture.md`](docs/architecture.md), [`docs/decisions.md`](docs/decisions.md) |
+| Architecture | [`docs/architecture.md`](docs/architecture.md) |
 | Performance | [Sizing and limits](docs/architecture.md#sizing-and-limits) |
 | Dependencies and licenses | [`docs/dependencies.md`](docs/dependencies.md) |
 

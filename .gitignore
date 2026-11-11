@@ -18,7 +18,8 @@
 .idea/
 .vscode/
 
-# Local agent tooling
+# Local agent tooling and project notes
 .claude/
 .codex/
 CLAUDE.md
+/docs/decisions.md
