@@ -54,7 +54,7 @@ defineExpose({ commit, pending, reset: () => { input.value = ''; inputError.valu
 
 <template>
   <div class="flex flex-col gap-2">
-    <FormField :label="label ?? 'CC addresses'" optional :error="inputError ?? error" :hint="hint ?? `Up to ${MAX}. Press Enter to add. They get the same email notices as the requester.`">
+    <FormField :label="label ?? 'CC addresses'" optional :error="inputError ?? error" :hint="hint ?? `Up to ${MAX}. Press Enter to add. They get the same email notices as the requester, and a notice when the requester replies or resolves the ticket.`">
       <div class="flex gap-2">
         <TextInput v-model="input" type="email" size="sm" placeholder="name@example.com" :disabled="disabled" @keydown.enter.prevent="commit()" />
         <BaseButton size="sm" :disabled="disabled || !input.trim()" @click="commit()">

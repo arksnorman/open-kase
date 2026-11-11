@@ -66,7 +66,8 @@ async function save() {
       </p>
       <p class="m-0 text-xs text-muted">
         The requester and every CC address receive the same email notices about this ticket (acknowledgement, reply
-        notices, reminders, resolved and archived). Message text is never included in these emails.
+        notices, reminders, resolved and archived). When one of them replies or resolves the ticket through the
+        integrating system, the others are told and that person is not. Message text is never included in these emails.
       </p>
       <CcEmailsInput ref="ccInput" v-model="draft" :requester-email="ticket.requester.email" :disabled="disabled || saving" />
       <p v-if="!draft.length" class="m-0 text-muted">No CC addresses.</p>

@@ -22,7 +22,9 @@ type Facts struct {
 	RequesterAck bool
 	Watchers     []string // user IDs watching the ticket
 	GroupMembers []string // user IDs in the ticket's current group
-	// CC are the ticket's CC addresses: copied on every requester email.
+	// CC are the ticket's CC addresses (stored trimmed and lower case):
+	// copied on every requester email, and told about the requester's own
+	// replies and resolves.
 	CC []string
 	// ActorEmail is the address of the contact who acted for the customer
 	// side (see ActingContactId); empty when unknown or not applicable.
@@ -52,7 +54,7 @@ func (t EmailTarget) Optional() bool {
 //   - public message by the customer side (the requester or a teammate
 //     named by contactId): the rest of the customer side (requester and CC
 //     addresses, never the person who wrote it, matched by contact ID or,
-//     for CC addresses, by email ignoring case), assignee and staff
+//     for CC addresses, by trimmed lower-case email), assignee and staff
 //     watchers; the group queue when the ticket is unassigned.
 //   - agent note: link-only notice to the assignee and staff watchers;
 //     never to contacts.
@@ -64,7 +66,8 @@ func (t EmailTarget) Optional() bool {
 //     send nothing (a requesterReply is covered by the reply notice).
 //   - follow-up reminder (automation): the requester only.
 //   - every email planned for the requester is also planned, with the same
-//     template, for each of the ticket's CC addresses (one delivery each).
+//     template, for each of the ticket's CC addresses (one delivery each),
+//     except a CC address of the contact who acted.
 //   - scheduled message held for review: its author only (staff notice
 //     with a link, no body).
 //   - scheduled message cancelled by the system (ticket archived or
@@ -93,12 +96,13 @@ func PlanEmail(f Facts) []EmailTarget {
 	// addCustomerSide plans the requester and the CC addresses, except the
 	// contact who acted (actorId, actorEmail).
 	addCustomerSide := func(tpl templates.Kind, actorId, actorEmail string) {
+		actorEmail = strings.ToLower(strings.TrimSpace(actorEmail))
 		if snap.RequesterId != "" && snap.RequesterId != actorId && !seen["contact:"+snap.RequesterId] {
 			seen["contact:"+snap.RequesterId] = true
 			out = append(out, EmailTarget{Kind: RecipientContact, Id: snap.RequesterId, Reason: ReasonRequester, Template: tpl})
 		}
 		for _, addr := range f.CC {
-			if addr == "" || seen["cc:"+addr] || (actorEmail != "" && strings.EqualFold(addr, actorEmail)) {
+			if addr == "" || seen["cc:"+addr] || (actorEmail != "" && strings.ToLower(strings.TrimSpace(addr)) == actorEmail) {
 				continue
 			}
 			seen["cc:"+addr] = true

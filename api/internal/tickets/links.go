@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/arksnorman/open-kase/api/internal/access"
@@ -256,17 +255,20 @@ type FollowUpInput struct {
 	Tags          []string
 	// NoSignature skips the author's signatures on the first message.
 	NoSignature bool
-	// ContactId authors the first message as another contact of the
-	// original's organisation. Only when the message is authored as the
-	// requester; the new ticket's requester stays the original's.
+	// ContactId opens the follow-up as another contact of the original's
+	// organisation: that contact is the new ticket's requester and the
+	// author of its first message. Only when the message is authored as
+	// the requester.
 	ContactId string
 }
 
 // FollowUp creates a new ticket linked followUpTo the original (which
-// may be archived or in any other state). It copies the subject, requester,
-// request type and group (the project's Triage group when that group is no
-// longer active) and nothing else: no messages, notes, attachments,
-// watchers, tags or assignee. The link is created in the same transaction.
+// may be archived or in any other state). It copies the subject, requester
+// (the teammate named by ContactId instead, when given), organisation, CC
+// addresses (without that teammate's own), request type and group (the
+// project's Triage group when that group is no longer active) and nothing
+// else: no messages, notes, attachments, watchers, tags or assignee. The
+// link is created in the same transaction.
 // This is the "Create follow-up ticket" action of ticketArchived.
 func (s *Service) FollowUp(ctx context.Context, scope *access.ProjectScope, ref string, in FollowUpInput) (Ticket, error) {
 	if err := scope.Require(access.CapTicketCreate); err != nil {
@@ -307,7 +309,8 @@ func (s *Service) FollowUp(ctx context.Context, scope *access.ProjectScope, ref 
 		// A teammate who opens the follow-up is its requester; they are
 		// not also copied.
 		contactID = contact.Id
-		cc = slices.DeleteFunc(slices.Clone(cc), func(a string) bool { return strings.EqualFold(a, contact.Email) })
+		own := normalizeAddress(contact.Email)
+		cc = slices.DeleteFunc(slices.Clone(cc), func(a string) bool { return a == own })
 	}
 	cin := CreateInput{Subject: subject, Body: body, Priority: in.Priority, RequestTypeId: &rtID,
 		Requester: RequesterInput{ContactId: &contactID}, OrganisationId: orgIDPtr(orig), keepOrganisation: true, CCEmails: cc}

@@ -17,9 +17,9 @@ const MaxCCEmails = 10
 // requester already receives every requester email.
 func NormalizeCCEmails(v *validation.Collector, field string, in []string, requesterEmail string) []string {
 	out := make([]string, 0, len(in))
-	req := strings.ToLower(strings.TrimSpace(requesterEmail))
+	req := normalizeAddress(requesterEmail)
 	for i, raw := range in {
-		e := strings.ToLower(strings.TrimSpace(raw))
+		e := normalizeAddress(raw)
 		f := field + "[" + strconv.Itoa(i) + "]"
 		if fe := validation.TicketCCEmail.CheckString(f, e); fe != nil {
 			v.Add(fe.Field, fe.Code, fe.Message)
@@ -37,4 +37,10 @@ func NormalizeCCEmails(v *validation.Collector, field string, in []string, reque
 		v.Int(validation.TicketCCCount, field, int64(len(out)))
 	}
 	return out
+}
+
+// normalizeAddress is the stored form of a CC address (trimmed, lower
+// case); addresses are compared in this form.
+func normalizeAddress(a string) string {
+	return strings.ToLower(strings.TrimSpace(a))
 }

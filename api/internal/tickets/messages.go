@@ -513,9 +513,10 @@ func (s *Service) DeleteDraft(ctx context.Context, scope *access.ProjectScope, r
 }
 
 // ContactMark prefixes the change that names the contact who acted for the
-// customer side instead of the requester (a reply, a resolve or a
-// follow-up): on the audit event, and on the ticket.created and
-// ticket.statusChanged outbox events, whose webhooks send it as contactId.
+// customer side instead of the requester (a reply or a resolve): on the
+// audit event, and on the ticket.statusChanged outbox event, whose webhook
+// sends it as contactId. A follow-up opened by a teammate carries no mark:
+// the teammate is the new ticket's requester.
 const ContactMark = "contact:"
 
 // organisationContact checks a contactId against the ticket's organisation.

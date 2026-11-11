@@ -404,7 +404,7 @@ func operations() []op {
 		{Method: "POST", Path: "/api/v1/tickets/:t/follow-up", Id: "createFollowUpTicket", Tag: "Tickets", Summary: "Create a linked follow-up ticket",
 			Auth: authUserOrToken, Permission: permMember + " API tokens: `tickets:create` and `tickets:read`.",
 			Description: "The \"Create follow-up ticket\" action of `ticketArchived` problems (also allowed for tickets in any other state). Creates a new " +
-				"ticket linked `followUpTo` the original in the same transaction, copying only the subject, requester, request type, CC list and group (Triage when " +
+				"ticket linked `followUpTo` the original in the same transaction, copying only the subject, requester, organisation, request type, CC list and group (Triage when " +
 				"that group is inactive) — no messages, agent notes, attachments, watchers, tags or assignee. The requester is the original's unless `contactId` names a teammate. " +
 				"`contactId` opens the follow-up as another contact of the original's organisation, only when the first message is written as the requester (a token with neither `tickets:comment` nor `tickets:all`; users and tokens that write as the bot get `422 notAllowed`). It must belong to the original's organisation (`422 contactNotInOrganisation`); that contact becomes the requester of the new ticket and the author of its first message, the copied CC list drops their own address, and no `contactId` is recorded on `ticket.created`.",
 			Request: followUpRequest{}, Response: ticketDTO{}, Status: 201, Idempotent: true, Errors: []errSpec{errTicket, errForbidden, {409, []string{"tooManyLinks"}}},

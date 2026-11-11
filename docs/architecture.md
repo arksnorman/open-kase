@@ -204,13 +204,13 @@ projects with subscribers; each stream authorizes every change for its own princ
 
 - Ticket created: the requester acknowledgement (project setting) and the group's agents.
 - Public reply by staff: requester (plus CC addresses), assignee, watchers.
-- Public reply by the requester: assignee and watchers; the group queue if unassigned.
+- Public reply by the customer side (the requester, or a teammate named by `contactId`): the rest of the customer side (the requester and the CC addresses, never the person who wrote it), assignee and watchers; the group queue if unassigned.
 - Agent note: a link-only notice to the assignee and staff watchers; never to contacts or CC addresses.
 - Claim, release, assignment: the new assignee, or the group when unassigned.
-- Resolve or archive: requester (plus CC addresses), except for a resolve made by the requester side; resolve, reopen, archive: assignee and watchers.
+- Resolve or archive: requester (plus CC addresses); a resolve made by the requester side goes to the rest of the customer side, never to the person who did it. Resolve, reopen, archive: assignee and watchers.
 - Follow-up reminder: requester. Scheduled message held for review or cancelled: its author.
 - SLA warning and breach: assignee and group (staff only). Hold ended: the assignee only.
-- Every email to the requester is repeated, one delivery each, to the ticket's CC addresses.
+- Every email to the requester is repeated, one delivery each, to the ticket's CC addresses. A CC address that belongs to the contact who acted is skipped.
 - Watcher and group-queue emails can be muted in preferences; requester, assignee and core notices cannot.
 
 Requester emails carry no agent link. If `notifications.requesterLinkBaseUrl` is set, they link to

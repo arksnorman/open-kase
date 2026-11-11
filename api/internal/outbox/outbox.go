@@ -75,7 +75,7 @@ type Event struct {
 	Transition string
 	// Changes lists the public field names of a ticket.updated event. Other
 	// event types carry marks in it, which are never sent as field names:
-	// contact:<id> (ticket.created, ticket.statusChanged), holdReason:<name>
+	// contact:<id> (ticket.statusChanged), holdReason:<name>
 	// (hold ended), reminder:<n> and autoResolveNotice (follow-up reminder),
 	// and the reason and visibility:<audience> of a scheduled-message notice.
 	Changes []string
