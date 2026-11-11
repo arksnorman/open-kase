@@ -19,6 +19,21 @@ func TestRequesterSideResolveSendsNoRequesterEmail(t *testing.T) {
 		t.Fatalf("requester emailed about their own resolve: %+v", f.mail.Sent())
 	}
 
+	// With requester emails off nothing is planned either: no skipped delivery.
+	put, v := f.settingsPut(map[string]any{"notifications": map[string]any{"requesterEmails": false}})
+	f.do("PUT", "/api/v1/settings", put, bearer(f.admin.Access), ifMatchV(v)).expect(200)
+	off := f.createTicket(f.integration, map[string]any{"subject": "Closed while off", "ccEmails": []string{"ops@acme.example"}}).Ref()
+	f.drain()
+	f.do("POST", tpath(off, "/transitions"), map[string]any{"action": "resolve"}, bearer(tok)).expect(200)
+	f.drain()
+	for _, d := range f.deliveriesFor("ticket.statusChanged") {
+		if d.Channel == "email" && (d.Recipient.Kind == "contact" || d.Recipient.Kind == "address") {
+			t.Fatalf("requester-side resolve recorded a requester delivery while off: %+v", d)
+		}
+	}
+	put, v = f.settingsPut(map[string]any{"notifications": map[string]any{"requesterEmails": true}})
+	f.do("PUT", "/api/v1/settings", put, bearer(f.admin.Access), ifMatchV(v)).expect(200)
+
 	// A staff resolve still tells the requester and the CC addresses.
 	other := f.createTicket(f.integration, map[string]any{"subject": "Closed by staff", "ccEmails": []string{"ops@acme.example"}}).Ref()
 	f.drain()

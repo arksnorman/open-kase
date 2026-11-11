@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -166,5 +167,35 @@ func TestFollowupReminderWebhook(t *testing.T) {
 		if cc, _ := d["ccEmails"].([]any); len(cc) != 1 {
 			t.Fatalf("ccEmails: %v", d)
 		}
+	}
+}
+
+// The reminder number counts within one waiting period: a reply ends the
+// period, and the next one starts at 1 again.
+func TestFollowupReminderNumberRestarts(t *testing.T) {
+	f := newAutomationFixture(t)
+	f.c.Boot.Env = EnvDevelopment
+	hs := newHookServer(t)
+	f.addHook(hs, "ticket.followupReminder")
+	f.do("PUT", "/api/v1/automation", map[string]any{"archiveAfterResolvedDays": 0, "customerFollowupAfterHours": 24, "maxReminders": 3,
+		"reminderCooldownHours": 24, "autoResolveAfterHours": 0}, bearer(f.admin.Access), header("If-Match", "0")).expect(200)
+	_, tok := f.token("Portal", "tickets:read", "tickets:replyAsRequester")
+	k := f.createTicket(f.integration, map[string]any{"subject": "Waiting twice"}).Ref()
+	f.waiting(f.dana.Access, k)
+	f.advance(25 * time.Hour)
+	f.do("POST", tpath(k, "/messages"), map[string]any{"visibility": "public", "body": "Here you go", "as": "requester"}, bearer(tok)).expect(201)
+	f.waiting(f.dana.Access, k)
+	f.advance(25 * time.Hour)
+	f.advance(25 * time.Hour)
+	var got []float64
+	for _, env := range hookEnvelopes(t, hs)["ticket.followupReminder"] {
+		d := obj(env, "data")
+		if d["autoResolveNotice"] != false {
+			t.Fatalf("notice without auto-resolve: %v", d)
+		}
+		got = append(got, d["reminder"].(float64))
+	}
+	if !slices.Equal(got, []float64{1, 1, 2}) {
+		t.Fatalf("reminder numbers: %v", got)
 	}
 }

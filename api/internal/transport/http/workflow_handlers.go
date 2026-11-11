@@ -93,7 +93,7 @@ type followUpRequest struct {
 	GroupId       *string  `json:"groupId" doc:"Defaults to the original's group (Triage when inactive)."`
 	RequestTypeId *string  `json:"requestTypeId" doc:"Defaults to the original's request type."`
 	Tags          []string `json:"tags" doc:"Catalog tags for the follow-up (none by default)."`
-	ContactId     string   `json:"contactId" doc:"Only when the first message is written as the requester (a token without tickets:comment): author it as this contact of the original's organisation (contactNotInOrganisation otherwise). The new ticket's requester stays the original's. Users and tokens that write as the bot: 422 notAllowed."`
+	ContactId     string   `json:"contactId" doc:"Only when the first message is written as the requester (a token with neither tickets:comment nor tickets:all): author it as this contact of the original's organisation (contactNotInOrganisation otherwise). The new ticket's requester stays the original's. Users and tokens that write as the bot: 422 notAllowed."`
 }
 
 func (a *api) createFollowUp(c *gin.Context) {
@@ -160,7 +160,7 @@ type activityDTO struct {
 	Action    string           `json:"action" doc:"Audit action, e.g. ticket.claimed, ticket.statusChanged, message.created, ticket.linkAdded, message.redacted."`
 	Actor     activityActorDTO `json:"actor"`
 	Target    string           `json:"target" doc:"Affected record, e.g. ticket/<id>, message/<id> or ticketLink/<id>."`
-	Changes   []string         `json:"changes" doc:"Changed field names (message events: visibility:<audience>)."`
+	Changes   []string         `json:"changes" doc:"Changed field names, plus marks such as visibility:<audience> (message events), links:<type> and contact:<id> (the contact who acted for the customer side instead of the requester)."`
 	Reason    *string          `json:"reason"`
 	Outcome   string           `json:"outcome" enum:"success,failure"`
 	CreatedAt time.Time        `json:"createdAt"`

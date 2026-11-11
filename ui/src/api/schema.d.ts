@@ -1493,7 +1493,7 @@ export interface paths {
         put?: never;
         /**
          * Create a linked follow-up ticket
-         * @description The "Create follow-up ticket" action of `ticketArchived` problems (also allowed for tickets in any other state). Creates a new ticket linked `followUpTo` the original in the same transaction, copying only the subject, requester, request type and group (Triage when that group is inactive) — no messages, agent notes, attachments, watchers, tags or assignee. The requester is always the original's. `contactId` authors the first message as another contact of the original's organisation, only when that message is written as the requester (a token without `tickets:comment`; users and tokens that write as the bot get `422 notAllowed`). It must belong to the original's organisation (`422 contactNotInOrganisation`), and the new ticket's `ticket.created` audit event records it.
+         * @description The "Create follow-up ticket" action of `ticketArchived` problems (also allowed for tickets in any other state). Creates a new ticket linked `followUpTo` the original in the same transaction, copying only the subject, requester, request type and group (Triage when that group is inactive) — no messages, agent notes, attachments, watchers, tags or assignee. The requester is always the original's. `contactId` authors the first message as another contact of the original's organisation, only when that message is written as the requester (a token with neither `tickets:comment` nor `tickets:all`; users and tokens that write as the bot get `422 notAllowed`). It must belong to the original's organisation (`422 contactNotInOrganisation`); the new ticket's `ticket.created` audit event records it and the `ticket.created` webhook carries it as `contactId`.
          *
          *     **Permission:** Admins and agents. API tokens: `tickets:create` and `tickets:read`.
          *
@@ -1781,7 +1781,7 @@ export interface paths {
         put?: never;
         /**
          * Resolve, reopen, archive, hold or set a status
-         * @description `hold` puts an Open or Awaiting customer ticket On hold: `holdReasonId` is required and the hold lasts exactly the reason's `maxDays` (`ticket.hold.until`); an optional `note` is saved as an internal note. Resolved and Archived tickets cannot be put on hold (`409 invalidTransition`). The ticket returns to Open on its own at `until` (assignee kept, the assignee is emailed), or earlier when staff change its status, the requester replies or a requester-side token resolves it. `setStatus` cannot select On hold. The requester is never notified about holds, and the first-response SLA keeps running. A requester-side token (`tickets:replyAsRequester`) closes its ticket with `resolve`: it sees no version, so `If-Match` is not required (and ignored); every other action is `403 userRequired` for it. For the requester side, resolving a ticket that is already Resolved answers `200` with the ticket and writes nothing (staff get `409 invalidTransition`); an archived ticket is `409 ticketArchived`. The requester reopens by replying. A requester-side resolve sends no email to the requester or CC addresses. `contactId` (requester-side resolve only; any other caller gets `422 notAllowed`) names the contact of the ticket's organisation who resolved it: it must belong to the ticket's organisation (`422 contactNotInOrganisation`; the ticket needs an organisation), and the `ticket.resolved` audit event records it. Omitted or the requester's own ID: the requester.
+         * @description `hold` puts an Open or Awaiting customer ticket On hold: `holdReasonId` is required and the hold lasts exactly the reason's `maxDays` (`ticket.hold.until`); an optional `note` is saved as an internal note. Resolved and Archived tickets cannot be put on hold (`409 invalidTransition`). The ticket returns to Open on its own at `until` (assignee kept, the assignee is emailed), or earlier when staff change its status, the requester replies or a requester-side token resolves it. `setStatus` cannot select On hold. The requester is never notified about holds, and the first-response SLA keeps running. A requester-side token (`tickets:replyAsRequester`) closes its ticket with `resolve`: it sees no version, so `If-Match` is not required (and ignored); every other action is `403 userRequired` for it. For the requester side, resolving a ticket that is already Resolved answers `200` with the ticket and writes nothing (staff get `409 invalidTransition`); an archived ticket is `409 ticketArchived`. The requester reopens by replying. A requester-side resolve sends no email to the requester or CC addresses. `contactId` (requester-side resolve only; any other caller gets `422 notAllowed`) names the contact of the ticket's organisation who resolved it: it must belong to the ticket's organisation (`422 contactNotInOrganisation`; the ticket needs an organisation), and the `ticket.resolved` audit event records it and the `ticket.statusChanged` webhook carries it as `contactId`. Omitted or the requester's own ID: the requester.
          *
          *     **Permission:** Admins and agents. (`ticket.transition`) and staff tokens (`tickets:write`). A requester-side token holding `tickets:replyAsRequester` may send `resolve` only. `If-Match` is required for users and staff tokens (`428 preconditionRequired` without it) and not used for requester-side resolve.
          */
@@ -2171,7 +2171,7 @@ export interface components {
             /** @description Audit action, e.g. ticket.claimed, ticket.statusChanged, message.created, ticket.linkAdded, message.redacted. */
             action: string;
             actor: components["schemas"]["ActivityActor"];
-            /** @description Changed field names (message events: visibility:<audience>). */
+            /** @description Changed field names, plus marks such as visibility:<audience> (message events), links:<type> and contact:<id> (the contact who acted for the customer side instead of the requester). */
             changes: string[];
             /** Format: date-time */
             createdAt: string;
@@ -2511,7 +2511,7 @@ export interface components {
             addSignature?: boolean | null;
             /** @description First public message; defaults to "Follow-up to <KEY>." */
             body?: string | null;
-            /** @description Only when the first message is written as the requester (a token without tickets:comment): author it as this contact of the original's organisation (contactNotInOrganisation otherwise). The new ticket's requester stays the original's. Users and tokens that write as the bot: 422 notAllowed. */
+            /** @description Only when the first message is written as the requester (a token with neither tickets:comment nor tickets:all): author it as this contact of the original's organisation (contactNotInOrganisation otherwise). The new ticket's requester stays the original's. Users and tokens that write as the bot: 422 notAllowed. */
             contactId?: string;
             /** @description Defaults to the original's group (Triage when inactive). */
             groupId?: string | null;
@@ -3414,7 +3414,7 @@ export interface components {
         TransitionTicketRequest: {
             /** @enum {string} */
             action: "resolve" | "reopen" | "archive" | "hold" | "setStatus";
-            /** @description Only with resolve by a requester-side token: the contact of the ticket's organisation who resolved it (contactNotInOrganisation otherwise; the ticket needs an organisation). Recorded in the audit history. Omitted or the requester's own ID: the requester. Any other caller: 422 notAllowed. */
+            /** @description Only with resolve by a requester-side token: the contact of the ticket's organisation who resolved it (contactNotInOrganisation otherwise; the ticket needs an organisation). Recorded in the audit history and sent as contactId in the ticket.statusChanged webhook. Omitted or the requester's own ID: the requester. Any other caller: 422 notAllowed. */
             contactId?: string;
             /** @description Required with hold (and refused otherwise): the hold reason from GET /hold-reasons. The ticket returns to Open after the reason's maxDays. */
             holdReasonId?: string;

@@ -192,7 +192,7 @@ type ticketsFollowUpIn struct {
 	GroupId        string   `json:"groupId,omitempty" jsonschema:"Defaults to the original's group."`
 	RequestTypeId  string   `json:"requestTypeId,omitempty" jsonschema:"Defaults to the original's request type."`
 	Tags           []string `json:"tags,omitempty" jsonschema:"Catalog tags for the follow-up (none by default)."`
-	ContactId      string   `json:"contactId,omitempty" jsonschema:"Only when the first message is written as the requester (a token without tickets:comment): author it as this contact of the original's organisation (422 contactNotInOrganisation otherwise). The new ticket's requester stays the original's. Otherwise 422 notAllowed."`
+	ContactId      string   `json:"contactId,omitempty" jsonschema:"Only when the first message is written as the requester (a token with neither tickets:comment nor tickets:all): author it as this contact of the original's organisation (422 contactNotInOrganisation otherwise). The new ticket's requester stays the original's. Otherwise 422 notAllowed."`
 	IdempotencyKey string   `json:"idempotencyKey,omitempty" jsonschema:"Optional key (1-200 printable ASCII); a retry with the same key and arguments returns the first ticket."`
 }
 
@@ -458,18 +458,6 @@ func (h *Handler) ticketsList(ctx context.Context, c *call, in ticketsListIn) (a
 		"assignee": in.Assignee, "priority": in.Priority, "tag": in.Tag, "requestTypeId": in.RequestTypeId, "due": in.Due}
 	li := tickets.ListInput{View: in.View, Q: in.Q, GroupId: in.GroupId, Filter: transporthttp.ListFilter(func(name string) string { return params[name] })}
 	return h.list(ctx, c, li, in.pageArgs)
-}
-
-// splitIds parses a comma-separated ID list.
-func splitIds(raw string) []string {
-	if strings.TrimSpace(raw) == "" {
-		return nil
-	}
-	parts := strings.Split(raw, ",")
-	for i := range parts {
-		parts[i] = strings.TrimSpace(parts[i])
-	}
-	return parts
 }
 
 // ticketsSearch uses the audience-scoped full-text engine (the REST

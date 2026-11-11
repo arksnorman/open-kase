@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"net/url"
 	"slices"
 	"testing"
 )
@@ -69,6 +70,9 @@ func TestRequesterResolveAsOrganisationContact(t *testing.T) {
 	f.do("POST", tpath(key, "/transitions"), map[string]any{"action": "resolve", "contactId": sam}, bearer(f.dana.Access), ifMatchV(f.version(key))).expectFieldCode(t, "notAllowed")
 	resolve(key, staffTok, map[string]any{"contactId": sam}).expect(428)
 	f.do("POST", tpath(key, "/transitions"), map[string]any{"action": "resolve", "contactId": sam}, bearer(staffTok), ifMatchV(f.version(key))).expectFieldCode(t, "notAllowed")
+	// A token with a staff scope is staff, even when it also holds replyAsRequester.
+	_, bothTok := f.token("Both", "tickets:read", "tickets:write", "tickets:replyAsRequester")
+	f.do("POST", tpath(key, "/transitions"), map[string]any{"action": "resolve", "contactId": sam}, bearer(bothTok), ifMatchV(f.version(key))).expectFieldCode(t, "notAllowed")
 	f.do("POST", tpath(key, "/transitions"), map[string]any{"action": "archive", "contactId": sam}, bearer(tok)).expect(403, "userRequired")
 	if f.statusCategory(key) != "open" {
 		t.Fatalf("category after refused resolves: %s", f.statusCategory(key))
@@ -142,6 +146,7 @@ func TestFollowUpAsOrganisationContact(t *testing.T) {
 	_, tok := f.token("Portal", "tickets:read", "tickets:create")
 	_, noBot := f.token("Back office", "tickets:read", "tickets:create", "tickets:write")
 	_, bot := f.token("Bot", "tickets:read", "tickets:create", "tickets:comment")
+	_, all := f.token("Everything", "tickets:all")
 	orig := f.createTicket(f.integration, map[string]any{"organisationId": acme, "requester": map[string]any{"contactId": priya}}).Ref()
 	followUp := func(tok string, body map[string]any) result {
 		t.Helper()
@@ -154,6 +159,7 @@ func TestFollowUpAsOrganisationContact(t *testing.T) {
 	followUp(tok, map[string]any{"contactId": "000000000000000000000000"}).expectFieldCode(t, "contactNotInOrganisation")
 	followUp(tok, map[string]any{"contactId": "bad"}).expect(422)
 	followUp(bot, map[string]any{"contactId": sam}).expectFieldCode(t, "notAllowed")
+	followUp(all, map[string]any{"contactId": sam}).expectFieldCode(t, "notAllowed")
 	followUp(f.dana.Access, map[string]any{"contactId": sam}).expectFieldCode(t, "notAllowed")
 	if n := len(f.do("GET", "/api/v1/tickets", nil, bearer(f.admin.Access)).expect(200).Items()); n != 1 {
 		t.Fatalf("tickets after rejections: %d", n)
@@ -192,6 +198,97 @@ func TestFollowUpAsOrganisationContact(t *testing.T) {
 	// A ticket without an organisation never accepts another contact.
 	plain := f.createTicket(f.integration, map[string]any{"requester": map[string]any{"contactId": priya}}).Ref()
 	f.do("POST", tpath(plain, "/follow-up"), map[string]any{"contactId": sam}, bearer(tok)).expectFieldCode(t, "contactNotInOrganisation")
+
+	// An archived original still takes a teammate's follow-up.
+	for _, action := range []string{"resolve", "archive"} {
+		f.do("POST", tpath(orig, "/transitions"), map[string]any{"action": action}, bearer(f.admin.Access), ifMatchV(f.version(orig))).expect(200)
+	}
+	late := followUp(tok, map[string]any{"contactId": sam, "body": "Back again"}).expect(201).Ref()
+	if msgs := f.do("GET", tpath(late, "/messages"), nil, bearer(f.admin.Access)).expect(200).Items(); len(msgs) != 1 || obj(msgs[0], "author")["id"] != sam {
+		t.Fatalf("follow-up to an archived ticket: %v", msgs)
+	}
+}
+
+// The acting contact reaches webhook receivers as contactId on
+// ticket.statusChanged (a resolve, a reply that reopens) and ticket.created
+// (a follow-up), and only when it is not the requester.
+func TestActingContactInWebhooks(t *testing.T) {
+	f := newNotifyFixture(t)
+	f.c.Boot.Env = EnvDevelopment
+	hs := newHookServer(t)
+	f.addHook(hs, "ticket.statusChanged", "ticket.created")
+	acme, priya, sam, _, _ := f.orgContacts()
+	_, tok := f.token("Portal", "tickets:read", "tickets:create", "tickets:replyAsRequester")
+	key := f.createTicket(f.integration, map[string]any{"organisationId": acme, "requester": map[string]any{"contactId": priya}}).Ref()
+
+	// last drains the outbox and returns the newest payload of a type and how many arrived.
+	last := func(typ string) (map[string]any, int) {
+		t.Helper()
+		f.drain()
+		got := hookEnvelopes(t, hs)[typ]
+		if len(got) == 0 {
+			t.Fatalf("no %s webhook", typ)
+		}
+		return obj(got[len(got)-1], "data"), len(got)
+	}
+	want := func(d map[string]any, transition, by string, contact any) {
+		t.Helper()
+		if d["transition"] != transition || d["by"] != by {
+			t.Fatalf("want %s by %s: %v", transition, by, d)
+		}
+		if got, has := d["contactId"]; (contact == nil) == has || (has && got != contact) {
+			t.Fatalf("contactId %v (present %v), want %v: %v", got, has, contact, d)
+		}
+		if obj(d, "requester")["id"] != priya {
+			t.Fatalf("requester: %v", d["requester"])
+		}
+	}
+	resolve := func(body map[string]any) {
+		t.Helper()
+		body["action"] = "resolve"
+		f.do("POST", tpath(key, "/transitions"), body, bearer(tok)).expect(200)
+	}
+	reply := func(body map[string]any) {
+		t.Helper()
+		body["visibility"], body["body"], body["as"] = "public", "Still broken", "requester"
+		f.do("POST", tpath(key, "/messages"), body, bearer(tok)).expect(201)
+	}
+
+	if d, _ := last("ticket.created"); d["contactId"] != nil {
+		t.Fatalf("created: %v", d)
+	}
+	// A teammate resolves; repeating it sends nothing more.
+	resolve(map[string]any{"contactId": sam})
+	d, n := last("ticket.statusChanged")
+	want(d, "resolve", "requester", sam)
+	resolve(map[string]any{"contactId": sam})
+	if _, again := last("ticket.statusChanged"); again != n {
+		t.Fatalf("a repeated resolve sent a webhook: %d -> %d", n, again)
+	}
+	// The teammate's reply reopens it.
+	reply(map[string]any{"contactId": sam})
+	d, _ = last("ticket.statusChanged")
+	want(d, "requesterReply", "requester", sam)
+	// The requester, with or without their own id, and staff: no contactId.
+	resolve(map[string]any{})
+	d, _ = last("ticket.statusChanged")
+	want(d, "resolve", "requester", nil)
+	reply(map[string]any{"contactId": priya})
+	d, _ = last("ticket.statusChanged")
+	want(d, "requesterReply", "requester", nil)
+	f.do("POST", tpath(key, "/transitions"), map[string]any{"action": "resolve"}, bearer(f.dana.Access), ifMatchV(f.version(key))).expect(200)
+	d, _ = last("ticket.statusChanged")
+	want(d, "resolve", "staff", nil)
+
+	// Follow-ups: the teammate's carries contactId, the requester's does not.
+	f.do("POST", tpath(key, "/follow-up"), map[string]any{"contactId": sam}, bearer(tok)).expect(201)
+	if d, _ := last("ticket.created"); d["contactId"] != sam || obj(d, "requester")["id"] != priya {
+		t.Fatalf("teammate follow-up: %v", d)
+	}
+	f.do("POST", tpath(key, "/follow-up"), map[string]any{}, bearer(tok)).expect(201)
+	if d, _ := last("ticket.created"); d["contactId"] != nil {
+		t.Fatalf("requester follow-up: %v", d)
+	}
 }
 
 func TestMCPFollowUpAsOrganisationContact(t *testing.T) {
@@ -219,16 +316,30 @@ func TestMCPFollowUpAsOrganisationContact(t *testing.T) {
 
 func TestMCPListStaffFilters(t *testing.T) {
 	f := newMCPFixture(t)
+	f.do("POST", "/api/v1/tags", map[string]any{"name": "vip"}, bearer(f.admin.Access)).expect(201)
 	a := f.createTicket(f.dana.Access, map[string]any{"subject": "Critical one", "priority": 1}).Ref()
-	f.createTicket(f.dana.Access, map[string]any{"subject": "Normal one"})
+	b := f.createTicket(f.dana.Access, map[string]any{"subject": "Normal one"}).Ref()
+	f.do("PATCH", tpath(b), map[string]any{"tags": []string{"vip"}}, bearer(f.dana.Access), ifMatchV(f.version(b))).expect(200)
+	requestType := obj(f.get(f.admin.Access, a).expect(200).JSON(), "requestType")["id"].(string)
 	_, staff := f.token("Back office", "tickets:read", "tickets:write")
 	s := f.connect(staff)
+	// list returns the MCP result, which must be what REST answers for the same filters.
 	list := func(args map[string]any) []string {
 		t.Helper()
-		var out []string
+		out := []string{}
 		items, _ := mustCall(t, s, "ticketsList", args)["items"].([]any)
 		for _, it := range items {
 			out = append(out, refOf(it.(map[string]any)))
+		}
+		q, rest := url.Values{}, []string{}
+		for k, v := range args {
+			q.Set(k, v.(string))
+		}
+		for _, it := range f.do("GET", "/api/v1/tickets?"+q.Encode(), nil, bearer(staff)).expect(200).Items() {
+			rest = append(rest, refOf(it))
+		}
+		if !slices.Equal(out, rest) {
+			t.Fatalf("%v: MCP %v, REST %v", args, out, rest)
 		}
 		return out
 	}
@@ -241,11 +352,27 @@ func TestMCPListStaffFilters(t *testing.T) {
 	if got := list(map[string]any{"assignee": "me"}); len(got) != 0 {
 		t.Fatalf("assignee me: %v", got)
 	}
-	if got := list(map[string]any{"due": "running", "priority": "1,2"}); len(got) > 1 {
-		t.Fatalf("due: %v", got)
+	if got := list(map[string]any{"priority": "1,3"}); len(got) != 2 {
+		t.Fatalf("priority list: %v", got)
+	}
+	if got := list(map[string]any{"tag": "vip"}); len(got) != 1 || got[0] != b {
+		t.Fatalf("tag: %v", got)
 	}
 	if got := list(map[string]any{"tag": "nosuchtag"}); len(got) != 0 {
-		t.Fatalf("tag: %v", got)
+		t.Fatalf("unknown tag: %v", got)
+	}
+	if got := list(map[string]any{"requestTypeId": requestType}); len(got) != 2 {
+		t.Fatalf("request type: %v", got)
+	}
+	if got := list(map[string]any{"requestTypeId": "000000000000000000000000"}); len(got) != 0 {
+		t.Fatalf("other request type: %v", got)
+	}
+	if got := list(map[string]any{"requestTypeId": requestType, "priority": "1", "assignee": "unassigned"}); len(got) != 1 || got[0] != a {
+		t.Fatalf("combined: %v", got)
+	}
+	// due: whatever the SLA state is, MCP and REST agree (checked in list).
+	for _, due := range []string{"running", "breached"} {
+		list(map[string]any{"due": due})
 	}
 	mustFail(t, s, "ticketsList", map[string]any{"priority": "9"}, "validationFailed")
 	mustFail(t, s, "ticketsList", map[string]any{"due": "never"}, "validationFailed")

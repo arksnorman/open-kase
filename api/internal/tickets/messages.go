@@ -3,11 +3,11 @@ package tickets
 import (
 	"context"
 	"errors"
-	"github.com/arksnorman/open-kase/api/internal/customers"
 	"slices"
 
 	"github.com/arksnorman/open-kase/api/internal/access"
 	"github.com/arksnorman/open-kase/api/internal/audit"
+	"github.com/arksnorman/open-kase/api/internal/customers"
 	"github.com/arksnorman/open-kase/api/internal/idempotency"
 	"github.com/arksnorman/open-kase/api/internal/outbox"
 	"github.com/arksnorman/open-kase/api/internal/sla"
@@ -410,6 +410,9 @@ func (s *Service) postMessage(ctx context.Context, scope *access.ProjectScope, r
 			m.Audit = append(m.Audit, sev)
 			sc := s.outboxEvent(scope, outbox.TicketStatusChanged, t.Id, VisibilityPublic, now)
 			sc.Transition = outbox.TransitionRequesterReply
+			if contactChange != "" {
+				sc.Changes = []string{contactChange}
+			}
 			m.Outbox = append(m.Outbox, sc)
 		}
 		if len(thenChanged) > 0 {
@@ -509,8 +512,10 @@ func (s *Service) DeleteDraft(ctx context.Context, scope *access.ProjectScope, r
 	return s.repo.DeleteDraft(ctx, t.Id, scope.Principal.Id, visibility)
 }
 
-// ContactMark prefixes the audit change that names the contact who acted for
-// the customer side (a reply, a resolve or a follow-up).
+// ContactMark prefixes the change that names the contact who acted for the
+// customer side instead of the requester (a reply, a resolve or a
+// follow-up): on the audit event, and on the ticket.created and
+// ticket.statusChanged outbox events, whose webhooks send it as contactId.
 const ContactMark = "contact:"
 
 // organisationContact checks a contactId against the ticket's organisation.

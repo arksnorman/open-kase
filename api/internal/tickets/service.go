@@ -539,13 +539,15 @@ func (s *Service) create(ctx context.Context, scope *access.ProjectScope, in Cre
 	if len(attIDs) > 0 {
 		ev.Changes = append(ev.Changes, "attachments")
 	}
+	created := s.outboxEvent(scope, outbox.TicketCreated, "", VisibilityPublic, now)
 	if fu != nil && fu.contact != nil {
 		ev.Changes = append(ev.Changes, ContactMark+fu.contact.Id)
+		created.Changes = []string{ContactMark + fu.contact.Id}
 	}
 	cmd := CreateCommand{
 		Ticket: t, CreatedBy: s.actor(scope), Message: msg,
 		AttachmentIds: attIDs, Uploader: uploader, Audit: []audit.Event{ev}, KeepOrganisation: in.keepOrganisation,
-		Outbox:   []outbox.Event{s.outboxEvent(scope, outbox.TicketCreated, "", VisibilityPublic, now)},
+		Outbox:   []outbox.Event{created},
 		ViewerId: viewerID(scope),
 	}
 	if ref, ok := idempotency.RefFrom(ctx); ok {
@@ -1459,7 +1461,7 @@ func (s *Service) transition(ctx context.Context, scope *access.ProjectScope, re
 		m.Outbox = append(m.Outbox, s.outboxEvent(scope, outbox.MessageCreated, t.Id, VisibilityAgent, now))
 	}
 	sc := s.outboxEvent(scope, outbox.TicketStatusChanged, t.Id, VisibilityPublic, now)
-	sc.Transition = in.Action
+	sc.Transition, sc.Changes = in.Action, contactChanges
 	m.Outbox = append([]outbox.Event{sc}, m.Outbox...)
 	return s.mutate(ctx, scope, m, nil)
 }

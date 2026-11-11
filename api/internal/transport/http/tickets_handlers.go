@@ -255,7 +255,7 @@ type transitionTicketRequest struct {
 	Reason       string  `json:"reason"`
 	HoldReasonId string  `json:"holdReasonId" doc:"Required with hold (and refused otherwise): the hold reason from GET /hold-reasons. The ticket returns to Open after the reason's maxDays."`
 	Note         string  `json:"note" doc:"Only with hold: an optional internal note (agent audience) saved with the hold. Needs the internal-note permission (tickets:internal for tokens)."`
-	ContactId    string  `json:"contactId" doc:"Only with resolve by a requester-side token: the contact of the ticket's organisation who resolved it (contactNotInOrganisation otherwise; the ticket needs an organisation). Recorded in the audit history. Omitted or the requester's own ID: the requester. Any other caller: 422 notAllowed."`
+	ContactId    string  `json:"contactId" doc:"Only with resolve by a requester-side token: the contact of the ticket's organisation who resolved it (contactNotInOrganisation otherwise; the ticket needs an organisation). Recorded in the audit history and sent as contactId in the ticket.statusChanged webhook. Omitted or the requester's own ID: the requester. Any other caller: 422 notAllowed."`
 }
 
 func (a *api) transitionTicket(c *gin.Context) {

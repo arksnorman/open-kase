@@ -77,15 +77,15 @@ recorded with the event, not from a later state.
 
 | Type | Sent when | `data` |
 | --- | --- | --- |
-| `ticket.created` | A ticket was created (by an agent or through the API) | `subject`, `priority` (1–4), `requestedPriority` (when an integration asked for one), `status` `{id, name, category}`, `group` `{id, name}`, `requestType` `{id, name}`, `source` (`web`/`api`), `requester` `{id, name, email, externalId}`, `organisation` `{id, name, externalRef}` (`null` when none), `ccEmails` (array), `createdAt` |
+| `ticket.created` | A ticket was created (by an agent or through the API) | `subject`, `priority` (1–4), `requestedPriority` (when an integration asked for one), `status` `{id, name, category}`, `group` `{id, name}`, `requestType` `{id, name}`, `source` (`web`/`api`), `requester` `{id, name, email, externalId}`, `organisation` `{id, name, externalRef}` (`null` when none), `ccEmails` (array), `createdAt`, `contactId` (only on a follow-up opened as another contact of the organisation with `contactId`: that contact's ID) |
 | `ticket.updated` | Subject, priority, request type or organisation changed | `changes` (field names), `subject`, `priority`, `requestType` `{id}`, `organisation` `{id, name, externalRef}` (`null` when none) |
 | `ticket.message.public` | A public reply was added by staff, an agent token (bot) or the requester | `subject`, `requester`, `organisation`, `ccEmails` (same shapes as `ticket.created`), `message` `{id, visibility: "public", author {context: staff\|bot\|contact, id (contact only), name}, body (raw Markdown), attachments [{id, filename, size, contentType}], createdAt}`. A file a redaction removed before the payload was built (`removeAttachments`) is `{id, removed: true}` with no other member |
 | `ticket.message.agentNote` | An agent-only note was added — **only with `includeAgentNotes`** | same shape as above with `visibility: "agent"` and the note body |
 | `ticket.assigned` | The ticket was claimed, released, assigned or moved to another group | `group` `{id, name}`; with `includeAgentNotes` also `assignee` `{id, name}` or `null`. Staff identities are not sent to public endpoints |
-| `ticket.statusChanged` | Resolve, reopen, archive, set status, or a requester reply that reopened the ticket | `subject`, `requester`, `organisation`, `ccEmails` (as `ticket.created`), `status` `{id, name, category}`, `transition` (`resolve`, `reopen`, `archive`, `hold`, `holdEnded`, `setStatus`, `requesterReply`), `by` (who changed it: `staff` for a user or a staff token, `requester` for a requester-side token's resolve or a requester reply that reopened the ticket, `automation` for auto-resolve, auto-archive and a hold that ended) |
+| `ticket.statusChanged` | Resolve, reopen, archive, set status, or a requester reply that reopened the ticket | `subject`, `requester`, `organisation`, `ccEmails` (as `ticket.created`), `status` `{id, name, category}`, `transition` (`resolve`, `reopen`, `archive`, `hold`, `holdEnded`, `setStatus`, `requesterReply`), `by` (who changed it: `staff` for a user or a staff token, `requester` for a requester-side token's resolve or a requester reply that reopened the ticket, `automation` for auto-resolve, auto-archive and a hold that ended), `contactId` (only when another contact of the ticket's organisation resolved it, or reopened it by replying, with `contactId`: that contact's ID; absent when the requester did it) |
 | `ticket.slaWarning` | The ticket's first response is due soon (the SLA's warning share of the target has passed) | `sla` `{kind: firstResponse, state: "dueSoon", dueAt}`, `priority` |
 | `ticket.slaBreached` | The first-response deadline was missed (sent once per deadline) | `sla` `{kind, state: "breached", dueAt}`, `priority` |
-| `ticket.followupReminder` | A follow-up reminder was sent (lifecycle automation) because the ticket still waits for the requester | `subject`, `requester`, `organisation`, `ccEmails` (as `ticket.created`), `reminder` (the number of this reminder in the current waiting period, starting at 1), `autoResolveNotice` (`true` on the last reminder before the ticket is auto-resolved). Fires whether or not requester emails are enabled; use it to remind requesters yourself when they are off |
+| `ticket.followupReminder` | A follow-up reminder was sent (lifecycle automation) because the ticket still waits for the requester | `subject`, `requester`, `organisation`, `ccEmails` (as `ticket.created`), `reminder` (the number of this reminder in the current waiting period, starting at 1; absent only on a reminder an older version recorded), `autoResolveNotice` (`true` on the last reminder before the ticket is auto-resolved). Fires whether or not requester emails are enabled; use it to remind requesters yourself when they are off |
 | `webhook.test` | An administrator used "test delivery" | `test: true`, `message` (no `ticket`) |
 
 `requester`, `organisation`, `subject` and `ccEmails` are the same in every event that carries them. Agent notes never appear in these events.
@@ -101,6 +101,10 @@ ignore events with a *lower* revision than the one they already applied, not equ
 `message.author.id` is present only when `author.context` is `contact`: the requester's contact ID, or
 the teammate's when the reply was posted with `contactId`. Compare it with `requester.id` to tell them
 apart. Staff and bot authors never have an `id` in webhooks.
+
+`contactId` on `ticket.statusChanged` and `ticket.created` is that same teammate for a resolve, a reopening reply
+and a follow-up. open-kase emails nobody on the customer side about a change the customer side made (`by:
+"requester"`), so a receiver that wants the requester and the CC addresses told sends that notice itself.
 
 ## Authenticating deliveries
 
