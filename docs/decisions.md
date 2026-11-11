@@ -1,7 +1,7 @@
 # open-kase: decisions
 
-The decisions that currently hold, grouped by area, each with a short reason. This is the first release (v0.1.0),
-so superseded choices and their history are not kept here. Behaviour details live in
+The decisions that currently hold, grouped by area, each with a short reason. Superseded choices
+and their history are not kept here. Behaviour details live in
 [`api-contract-v1.md`](api-contract-v1.md) and `openapi.json`; the design lives in `architecture.md`.
 
 ## Product scope
@@ -146,7 +146,7 @@ so superseded choices and their history are not kept here. Behaviour details liv
 | `serve` runs the HTTP API, the outbox dispatcher and a bounded job pool; `worker` runs only background work against the same database | Simple by default, splittable later |
 | `seed-demo` creates demo data with suppressed notifications and refuses to run in production unless forced | Safe demos |
 | Readiness requires a writable MongoDB primary, a matching master key and loaded settings; Redis is optional (`degraded`) | Honest health reporting |
-| CI runs before any image is pushed: `release.yml` calls `ci.yml` (`workflow_call`) and builds `:edge` (main) or the version tags (`v*`) only after it passed. The Compose example pins `:0.1.1` (bump on upgrade) and gives Redis a password from a secret file, carried in `REDIS_URI` as `redis://:PASSWORD@redis:6379/0` | No untested images; repeatable installs; Redis is not open to other containers without a password |
+| CI runs before any image is pushed: `release.yml` calls `ci.yml` (`workflow_call`) and builds `:edge` (main) or the version tags (`v*`) only after it passed. The Compose example pins `:0.2.0` (bump on upgrade) and gives Redis a password from a secret file, carried in `REDIS_URI` as `redis://:PASSWORD@redis:6379/0` | No untested images; repeatable installs; Redis is not open to other containers without a password |
 | Delivery: a single root `Dockerfile` and the Docker image `ghcr.io/arksnorman/open-kase` on GHCR, run with the Compose setup in `docs/install.md`; see `docs/operations.md` for running it | One artifact, one documented install |
 | Audit events are append-only, separate from diagnostic logs, and record field names and IDs only, never message bodies or secrets. One injected `log/slog` logger, JSON in production | Safe, searchable records |
 | Rate limits are per principal in process (per IP on `/auth/*`); login and MFA throttles live in MongoDB | No Redis dependency for safety |
