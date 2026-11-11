@@ -61,8 +61,8 @@ older than 6.19 or 7.0.14 and newer. Pick a directory and create the master key:
 git clone https://github.com/arksnorman/open-kase.git open-kase && cd open-kase
 # ... or by downloading them into an empty directory:
 #   mkdir open-kase && cd open-kase
-#   curl -fsSLO https://raw.githubusercontent.com/arksnorman/open-kase/v0.2.0/compose.yaml
-#   curl -fsSLO https://raw.githubusercontent.com/arksnorman/open-kase/v0.2.0/.env.example
+#   curl -fsSLO https://raw.githubusercontent.com/arksnorman/open-kase/v0.3.0/compose.yaml
+#   curl -fsSLO https://raw.githubusercontent.com/arksnorman/open-kase/v0.3.0/.env.example
 mkdir secrets && chmod 700 secrets
 openssl rand -base64 32 > secrets/master.key
 chmod 600 secrets/master.key
@@ -96,7 +96,7 @@ The `.env` file (from [`.env.example`](../.env.example)) holds what `compose.yam
 | `COMPOSE_PROFILES` | `nginx` | Which bundled TLS proxy runs: `nginx` or `caddy`; empty for your own proxy (see [Reverse proxy and TLS](#reverse-proxy-and-tls)) |
 | `SITE_NAME` | `support.example.com` | Host name of the installation: goes into the self-signed certificate (nginx) or is the name Caddy gets a certificate for |
 | `HTTP_PORT`, `HTTPS_PORT` | `80`, `443` | Host ports the proxy publishes |
-| `OPEN_KASE_VERSION` | `0.2.0` | Image tag of `open-kase`; bump it to upgrade |
+| `OPEN_KASE_VERSION` | `0.3.0` | Image tag of `open-kase`; bump it to upgrade |
 | `MONGO_PASSWORD` | none | Must equal `secrets/mongo_root_password` |
 | `REDIS_PASSWORD` | none | Must equal `secrets/redis_password` |
 
@@ -106,7 +106,7 @@ The services in `compose.yaml` (read the file; every setting has a comment):
 | --- | --- | --- |
 | `mongo` | always | `mongo:8.0.34` with authentication and a replica-set keyfile; initiates the single-member replica set `rs0` on first start; no published port |
 | `redis` | always | `redis:8.2.2-alpine` with a password, no persistence; no published port |
-| `open-kase` | always | `ghcr.io/arksnorman/open-kase:${OPEN_KASE_VERSION:-0.2.0}`: API, MCP and web UI on port 8080, no published port; trusts proxies in `172.16.0.0/12` |
+| `open-kase` | always | `ghcr.io/arksnorman/open-kase:${OPEN_KASE_VERSION:-0.3.0}`: API, MCP and web UI on port 8080, no published port; trusts proxies in `172.16.0.0/12` |
 | `nginx` | `nginx` | `nginx:1.30.6`, TLS on `HTTP_PORT`/`HTTPS_PORT`, proxies to `open-kase:8080`; configuration inline (`configs:`) |
 | `caddy` | `caddy` | `caddy:2.11.8-alpine`, same role; configuration inline; data in the `caddy-data` and `caddy-config` volumes |
 
@@ -129,7 +129,7 @@ For scripted installs `init` also takes `--workspace-name`, `--admin-email`, `--
 The application is now running behind the proxy chosen in `COMPOSE_PROFILES`, and the image's
 health check (`open-kase health`) shows in `docker compose ps`. Continue with the reverse proxy
 below. The compose file pins the
-release (`:0.2.0`); to upgrade, set `OPEN_KASE_VERSION` in `.env` to the new version and run `docker compose pull &&
+release (`:0.3.0`); to upgrade, set `OPEN_KASE_VERSION` in `.env` to the new version and run `docker compose pull &&
 docker compose up -d`. `latest` follows the newest release tag and `edge` is the head of `main`
 (published only after CI passed); neither is meant for production.
 

@@ -2,7 +2,7 @@
 
 open-kase itself is licensed under the [Apache License 2.0](../LICENSE).
 
-Inventory for open-kase 0.2.0, from `api/go.mod` / `go list -m all` (licenses read from each
+Inventory for open-kase 0.3.0, from `api/go.mod` / `go list -m all` (licenses read from each
 module's LICENSE file in the module cache) and from `ui/package.json` with the installed `ui/node_modules` (the `license`
 field of each package). Versions are pinned: Go modules by `go.sum`, npm packages by exact versions and `ui/package-lock.json`.
 Container images and native tools are pinned in the root `Dockerfile` and the root `compose.yaml`.

@@ -50,7 +50,7 @@ services:
       retries: 6
 
   open-kase:
-    image: ghcr.io/arksnorman/open-kase:${OPEN_KASE_VERSION:-0.2.0}   # pinned; bump it when you upgrade
+    image: ghcr.io/arksnorman/open-kase:${OPEN_KASE_VERSION:-0.3.0}   # pinned; bump it when you upgrade
     restart: unless-stopped
     environment:
       APP_ENV: production
