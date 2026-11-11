@@ -73,7 +73,11 @@ type Event struct {
 	OccurredAt time.Time
 	// Transition names the lifecycle action of a status change.
 	Transition string
-	// Changes lists the public field names of a ticket.updated event.
+	// Changes lists the public field names of a ticket.updated event. Other
+	// event types carry marks in it, which are never sent as field names:
+	// contact:<id> (ticket.created, ticket.statusChanged), holdReason:<name>
+	// (hold ended), reminder:<n> and autoResolveNotice (follow-up reminder),
+	// and the reason and visibility:<audience> of a scheduled-message notice.
 	Changes []string
 	// UserID and GroupID identify the subject of an access-change event.
 	UserId  string

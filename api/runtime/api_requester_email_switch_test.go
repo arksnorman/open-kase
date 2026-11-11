@@ -193,7 +193,8 @@ func TestFollowupReminderNumberRestarts(t *testing.T) {
 		if d["autoResolveNotice"] != false {
 			t.Fatalf("notice without auto-resolve: %v", d)
 		}
-		got = append(got, d["reminder"].(float64))
+		n, _ := d["reminder"].(float64)
+		got = append(got, n)
 	}
 	if !slices.Equal(got, []float64{1, 1, 2}) {
 		t.Fatalf("reminder numbers: %v", got)

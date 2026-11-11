@@ -91,12 +91,17 @@ reminders). If your application sends its own emails or in-app notifications:
    `{context, id, name}`; `id` is the contact's ID for a customer author (compare it with `requester.id` to see a teammate), so notify the
    requester, the CC addresses and the other contacts except the author.
 3. `ticket.statusChanged` carries `by`: `"requester"` when the customer resolved the ticket with the portal token (or a
-   reply reopened it), `"staff"` for agents and staff tokens, `"automation"` for auto-resolve, auto-archive and a
-   hold that ended. When `by` is `"requester"`, open-kase emails nobody on the customer side, whatever the switch says, so
-   the notice to everyone but the person who acted is yours to send. `contactId` is the teammate who resolved the ticket or
-   whose reply reopened it (it is absent when the requester did it): notify the requester, the CC addresses and the
-   other contacts, and skip the one who acted. `ticket.created` carries `contactId` the same way for a follow-up a
-   teammate opened.
+   customer reply moved it back to Open), `"staff"` for agents and staff tokens, `"automation"` for auto-resolve,
+   auto-archive and a hold that ended. When `by` is `"requester"`, open-kase emails nobody on the customer side about
+   the change, whatever the switch says:
+   - `transition: "resolve"`: this notice is yours to send. Tell the CC addresses and the other contacts, and the
+     requester too when `contactId` is present (the teammate who resolved it; the key is absent when the requester
+     did). Skip the person who acted.
+   - `transition: "requesterReply"`: send nothing more. The reply itself arrives as `ticket.message.public` and the
+     notice from step 2 covers it (`contactId` equals that message's `author.id` when a teammate replied).
+
+   `ticket.created` carries `contactId` the same way for a follow-up a teammate opened; while the switch is on,
+   open-kase still sends its "received" email to the requester and the CC addresses.
 4. Handle `ticket.followupReminder`: open-kase is waiting for the customer. `reminder` is the number of this reminder in
    the current waiting period (1 for the first). When `autoResolveNotice` is `true` this
    is the last reminder and the ticket will be resolved automatically if nobody replies; tell the customer so.

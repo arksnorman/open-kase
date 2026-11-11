@@ -155,8 +155,8 @@ The tag, hold reason and organisation scopes are not part of `tickets:all` and d
   organisation (a teammate of the requester) instead of the requester: `author.id` and `author.name` are that
   contact's. The ticket needs an organisation and the contact must exist in the project with that organisation, else
   `422` with field error `contactNotInOrganisation`. `contactId` is
-  accepted when `as` is `"requester"` and also when `as` is omitted and defaults to requester (a token without
-  `tickets:comment`); with `as: "staff"` (or a default of `staff`) it is `422 notAllowed`. The requester's own ID equals
+  accepted when `as` is `"requester"` and also when `as` is omitted and defaults to requester (a token with neither
+  `tickets:comment` nor `tickets:all`); with `as: "staff"` (or a default of `staff`) it is `422 notAllowed`. The requester's own ID equals
   omitting it. An unknown contact ID answers `contactNotInOrganisation` as well, so contact IDs cannot be probed.
   The audit event of the message records `contact:<id>`. The reply is otherwise a
   requester reply (reopens, ends a hold, never a first response, no `thenStatusId`).

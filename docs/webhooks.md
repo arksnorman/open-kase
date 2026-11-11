@@ -42,7 +42,11 @@ replaces the default one.
   "type": "ticket.statusChanged",
   "occurredAt": "2026-10-02T08:00:00.123Z",
   "ticket": { "id": "6703e9aa0b1c2d3e4f506172", "number": 42, "revision": 7 },
-  "data": { "status": "resolved" }
+  "data": {
+    "status": { "id": "6703e8f10b1c2d3e4f506104", "name": "Resolved", "category": "resolved" },
+    "transition": "resolve",
+    "by": "staff"
+  }
 }
 ```
 
@@ -102,9 +106,11 @@ ignore events with a *lower* revision than the one they already applied, not equ
 the teammate's when the reply was posted with `contactId`. Compare it with `requester.id` to tell them
 apart. Staff and bot authors never have an `id` in webhooks.
 
-`contactId` on `ticket.statusChanged` and `ticket.created` is that same teammate for a resolve, a reopening reply
-and a follow-up. open-kase emails nobody on the customer side about a change the customer side made (`by:
-"requester"`), so a receiver that wants the requester and the CC addresses told sends that notice itself.
+`contactId` on `ticket.statusChanged` and `ticket.created` is that same teammate for a resolve, a reply that
+moved the ticket back to Open and a follow-up. open-kase sends the requester and the CC addresses no email about a
+requester-side resolve (`by: "requester"`, `transition: "resolve"`), so a receiver that wants them told sends that
+notice itself. The reply behind a `requesterReply` change also arrives as `ticket.message.public`, so one notice
+covers both. A follow-up still gets the "received" email.
 
 ## Authenticating deliveries
 
