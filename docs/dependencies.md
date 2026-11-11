@@ -32,7 +32,7 @@ Email uses `github.com/wneessen/go-mail` (not the older Gomail package). Regener
 | `github.com/go-playground/universal-translator` | v0.18.1 |  | MIT |  |
 | `github.com/go-playground/validator/v10` | v10.30.1 |  | MIT |  |
 | `github.com/goccy/go-yaml` | v1.19.2 |  | MIT |  |
-| `github.com/klauspost/compress` | v1.19.2 |  | Apache-2.0 |  |
+| `github.com/klauspost/compress` | v1.20.2 |  | Apache-2.0 |  |
 | `github.com/leodido/go-urn` | v1.4.0 |  | MIT |  |
 | `github.com/mattn/go-isatty` | v0.0.20 |  | MIT |  |
 | `github.com/pelletier/go-toml/v2` | v2.2.4 |  | MIT |  |
