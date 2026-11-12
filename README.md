@@ -34,17 +34,16 @@ With Docker Compose (MongoDB 8 as a single-node replica set, Redis and the publi
 
 ```sh
 mkdir open-kase && cd open-kase
-mkdir secrets && openssl rand -base64 32 > secrets/master.key
-sudo chown 65532:65532 secrets/master.key && chmod 600 secrets/master.key
-# put compose.yaml and .env.example from this repository here, create .env from .env.example (passwords, SITE_NAME,
-# COMPOSE_PROFILES=nginx or caddy for the bundled TLS proxy on ports 80/443), then:
+# Put compose.yaml and .env.example from this repository here, then create the secret files and .env as in
+# docs/install.md (master key, MongoDB and Redis passwords, SITE_NAME, COMPOSE_PROFILES=nginx or caddy for
+# the bundled TLS proxy on ports 80/443). Then:
 docker compose up -d mongo redis
 docker compose run --rm open-kase init      # creates the first administrator
 docker compose up -d
 ```
 
-The root `compose.yaml` (with the bundled nginx or Caddy TLS proxy), systemd installation and upgrade steps are in
-[`docs/install.md`](docs/install.md). A single host gives you transactions and backups; it is not
+The data stays in a `data/` directory beside `compose.yaml`. The full steps, the systemd installation and upgrades
+are in [`docs/install.md`](docs/install.md). A single host gives you transactions and backups; it is not
 a high-availability setup.
 
 ## Documentation
