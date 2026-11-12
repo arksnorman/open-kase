@@ -178,7 +178,8 @@ The tag, hold reason and organisation scopes are not part of `tickets:all` and d
 | `GET/POST /contacts`, `GET /contacts/{c}` | requesters; `GET /contacts?q=&externalId=` (`externalId` is an exact match, `acct-1` never matches `acct-10`; combined with `q` it narrows further); `POST` upserts by `externalId` first, then by email (a pair that identifies two different contacts, or an email that already carries another `externalId`, is `409`); optional `externalId` and `organisationId` (`""` clears, unknown ID is `422`, inactive organisation `422 organisationInactive`) |
 | `GET/POST /organisations`, `GET/PATCH/DELETE /organisations/{o}` | customer organisations (`name`, `externalRef`, `active`); the organisation is set explicitly on contacts and tickets and never inferred. `409 organisationExists`, `409 organisationRefTaken`, `409 organisationInUse` on delete while any contact or ticket references it (deactivate instead). Counts only for managers |
 | `GET/POST /integrations`, `PATCH/DELETE /integrations/{i}` | API tokens (admin, users only); `PATCH` renames; scopes and token never change after issue; `409 integrationRevoked` |
-| `GET /statuses`, `GET /request-types` | built-in statuses in order: Open, Awaiting customer, On hold, Resolved, Archived; request types are separate from priority |
+| `GET /statuses` | built-in statuses in order: Open, Awaiting customer, On hold, Resolved, Archived |
+| `GET /request-types` | request types by `order`, as `{ id, code, name, order, active, inUse, createdAt, version }`; separate from priority. Active types only; `?active=true\|false\|all` (anything else is `422`). Any member and any token can read. See **Request types** below |
 
 ## Tickets
 
@@ -189,9 +190,9 @@ ticket Open. Full shapes (`Ticket`, `Message`, `Attachment`, `Draft`, ...) are i
 | Route | Notes |
 | --- | --- |
 | `GET /tickets` | `?view=&q=&groupId=&cursor=&limit=` plus filters. Views: `all` (default), `myWork`, `unassigned` (my groups), `watching`, `awaitingCustomer`, `onHold`, `dueSoon`, `resolved`, `archived`. `q` is a ticket number or a subject substring. Sorted by `updatedAt` descending. Filters (comma-separated, combinable with any view): `statusId`, `organisationId` and `requesterId` (one contact ID: that contact's tickets) work for staff and for requester-side tokens (they only narrow what the token already reads); `priority`, `tag` (all listed), `requestTypeId`, `assignee=me\|unassigned\|<id>` and `due=dueSoon\|breached\|met\|missed\|running` are staff only (`403 userRequired` for requester-side tokens) |
-| `POST /tickets` | `{ subject, body, requester: { contactId } \| { name, email, externalId?, organisationId? }, priority?, requestTypeId?, groupId?, attachmentIds?, organisationId?, ccEmails? }` -> `201` + `Location`. The ticket enters the group (default Triage) unassigned. `ccEmails`: up to 10 addresses copied on requester emails. Requires `tickets:create` for tokens; `Idempotency-Key` supported |
+| `POST /tickets` | `{ subject, body, requester: { contactId } \| { name, email, externalId?, organisationId? }, priority?, requestTypeId?, groupId?, attachmentIds?, organisationId?, ccEmails? }` -> `201` + `Location`. The ticket enters the group (default Triage) unassigned. Without `requestTypeId` it gets the first active request type in order; an inactive type is `422` (field `requestTypeId`, code `inactive`), an unknown one `notFound`. The ticket carries `requestType` `{ id, code, name }`. `ccEmails`: up to 10 addresses copied on requester emails. Requires `tickets:create` for tokens; `Idempotency-Key` supported |
 | `GET /tickets/{t}` | one ticket |
-| `PATCH /tickets/{t}` | `{ priority?, requestTypeId?, tags?, organisationId?, ccEmails? }` + **If-Match**. `subject` is locked for staff (`403 subjectLocked`); only the token that created a ticket may change its subject. Signed-in users cannot change `organisationId` on a ticket created through the API or MCP (`403 organisationManagedByIntegration`); tokens can. Tags replace the set and each added tag must be in the catalog (`422 unknownTag`) |
+| `PATCH /tickets/{t}` | `{ priority?, requestTypeId?, tags?, organisationId?, ccEmails? }` + **If-Match**. A changed `requestTypeId` must name an active type (`422 inactive`); a ticket that already carries a type that was deactivated since keeps it and can still be edited. `subject` is locked for staff (`403 subjectLocked`); only the token that created a ticket may change its subject. Signed-in users cannot change `organisationId` on a ticket created through the API or MCP (`403 organisationManagedByIntegration`); tokens can. Tags replace the set and each added tag must be in the catalog (`422 unknownTag`) |
 | `POST /tickets/{t}/claim` | **If-Match**, group members only. Atomic: exactly one concurrent claim wins, the others get `409 ticketAlreadyClaimed`. Keeps status and group; non-member `403 notGroupMember` |
 | `POST /tickets/{t}/release` | `{ reason }` (3-500 characters, required) + If-Match; assignee or admin; `409 ticketNotAssigned` |
 | `POST /tickets/{t}/assignments` | `{ groupId, assigneeId? }` + If-Match. Absent `assigneeId` keeps the assignee when still an active member of the target group, otherwise clears; `null` unassigns; an ID assigns (`422 assigneeId notEligible`) |
@@ -201,8 +202,8 @@ ticket Open. Full shapes (`Ticket`, `Message`, `Attachment`, `Draft`, ...) are i
 | `GET/PUT/DELETE /tickets/{t}/drafts/{visibility}` | the caller's private draft per audience; `PUT` takes optional `If-Match` on the draft version |
 | `GET /tickets/{t}/watchers`, `PUT/DELETE /tickets/{t}/watchers/me` | watching grants no access; each watcher's access is re-checked when listed |
 | `GET/POST /tickets/{t}/links`, `DELETE /tickets/{t}/links/{l}` | `relatedTo`, `duplicateOf`, `followUpTo` (addable) and `copiedFrom` (created by copy). A link is shown only when the caller can read the other ticket |
-| `POST /tickets/{t}/follow-up` | new ticket linked `followUpTo` the original (works on archived tickets); copies subject, requester, organisation, request type, group and the CC list; default body `Follow-up to #<number>.` Optional `contactId` opens it as another contact of the original's organisation (`422 contactNotInOrganisation` otherwise); only when the first message is written as the requester (a token with neither `tickets:comment` nor `tickets:all`), else `422 notAllowed`. That contact is then the requester of the new ticket and the author of its first message; the organisation stays the original's, and the copied CC list drops the contact's own address (the original requester is not added). No `contactId` is recorded on `ticket.created` or its webhook |
-| `POST /tickets/{t}/copy` | new Open ticket linked `copiedFrom`; copies requester, CC, organisation, priority, request type, group, tags, first public message and attachments; not assignee, watchers, notes or history |
+| `POST /tickets/{t}/follow-up` | new ticket linked `followUpTo` the original (works on archived tickets); copies subject, requester, organisation, request type, group and the CC list (a request type that is inactive since gives the default one, like an inactive group gives Triage; an explicit inactive `requestTypeId` is `422`); default body `Follow-up to #<number>.` Optional `contactId` opens it as another contact of the original's organisation (`422 contactNotInOrganisation` otherwise); only when the first message is written as the requester (a token with neither `tickets:comment` nor `tickets:all`), else `422 notAllowed`. That contact is then the requester of the new ticket and the author of its first message; the organisation stays the original's, and the copied CC list drops the contact's own address (the original requester is not added). No `contactId` is recorded on `ticket.created` or its webhook |
+| `POST /tickets/{t}/copy` | new Open ticket linked `copiedFrom`; copies requester, CC, organisation, priority, request type (the default one when it is inactive since), group, tags, first public message and attachments; not assignee, watchers, notes or history |
 | `GET /tickets/{t}/activity` | staff only; the ticket's audit timeline, field names only, plus marks such as `visibility:<audience>`, `links:<type>` and `contact:<id>` (the contact who acted for the customer side instead of the requester); `?order=desc&action=` |
 | `POST /tickets/{t}/messages/{msg}/redact` | admin; see Redaction |
 | `GET /queue-counts` | counts for the sidebar queues (users) |
@@ -227,6 +228,26 @@ the first-response SLA keeps running, and reminders and auto-resolve do not appl
 **Hold reasons.** `GET/POST /hold-reasons`, `PATCH/DELETE /hold-reasons/{h}`: `{ name, maxDays }` (name 1-80,
 unique; `maxDays` 1-365; at most 100). A new `maxDays` affects only later holds; delete is
 `409 holdReasonInUse` while a ticket is on hold with the reason. `init` seeds six common reasons once.
+
+**Request types.** Every ticket has exactly one. Admins manage them (no token scope; API tokens get `403`):
+`POST /request-types` `{ name, code? }` (`201`), `PATCH /request-types/{t}` `{ name?, active? }` with **If-Match**,
+`PUT /request-types/order` `{ ids }` and `DELETE /request-types/{t}` with **If-Match** (`204`). Each type has a `code`
+(2-40 letters and digits, starting with a lowercase letter) that never changes: integrations map by `code`, so a
+rename breaks nothing. Without `code` it is derived from the name (`Service request` becomes `serviceRequest`,
+`API access` becomes `apiAccess`; a number is appended when the code is taken; a name that gives no valid code,
+for example one in another script, is `422` on `code`). `name` is 1-60 characters and unique ignoring case, also among
+inactive types (`409 requestTypeExists`; a taken explicit code is `409 requestTypeCodeExists`). A new type is active and
+goes last; a project has at most 50 (`409 requestTypeLimitReached`). `PATCH` renames, deactivates (`active: false`) or
+reactivates; `code` is rejected as an unknown field; at least one type must stay active
+(`409 requestTypeLastActive`); a request that changes nothing returns the type as it is. `PUT .../order` must list every
+type of the project, active and inactive, once each (malformed, empty or repeated IDs are `422` on `ids`; a list that no
+longer matches the types is `409 requestTypeOrderConflict`) and returns all types in the new order. `DELETE` is
+`409 requestTypeInUse` while any ticket carries the type (tickets are never deleted: deactivate it instead) and
+`409 requestTypeLastActive` for the only active type. `inUse` counts the tickets that carry the type; it is reported
+to admins and `0` for everyone else. `version` is the `If-Match` value; a type created before the version existed reads as `1`.
+Every change is audited (`requestType.created`, `.updated`, `.deleted`, `.reordered`). An inactive type cannot be set
+when creating or updating a ticket, but tickets that carry it keep it, keep showing its name and are still found with
+the `requestTypeId` filter. `init` seeds Issue, Question, Service request and Feature request on a new installation only.
 
 **Attachments.** `POST /attachments` (`multipart/form-data`, field `file`) stages an upload for 24 hours (10 MiB
 per file by default, `413 attachmentTooLarge`); reference the IDs in `attachmentIds` (at most 5 per message, 50 MiB

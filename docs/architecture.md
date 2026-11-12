@@ -39,7 +39,7 @@ The product name lives in one place, `package/product/product.go`.
 | Watcher | A user who gets notifications for a ticket. Self-only (`PUT/DELETE /tickets/:t/watchers/me`); watching grants no access. |
 | Ticket link | Related, duplicate, follow-up, copied-from. |
 | Scheduled message | A staff message sent later by a durable job. |
-| Canned reply (macro), tag, hold reason, request type | Project catalogs. Tags and hold reasons are admin-managed. |
+| Canned reply (macro), tag, hold reason, request type | Project catalogs. Tags, hold reasons and request types are admin-managed. A request type has a stable `code`; a type no ticket carries can be deleted, any other is deactivated. |
 | Integration | A service principal with a hashed token and chosen scopes (section 8). |
 | Webhook endpoint | URL, subscribed event types, headers, auth, TLS material, optional agent-note grant. |
 

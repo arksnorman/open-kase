@@ -107,7 +107,7 @@ bootstrap configuration error).
 
 | Command | Purpose |
 | --- | --- |
-| `init` | Idempotent installation: creates the master key file (mode 0600) if missing, collections and indexes (`EnsureSchema`), default settings, built-in statuses and request types, the single project with its Triage group, seed hold reasons and the first administrator. Flags: `--workspace-name`, `--admin-email`, `--admin-given-name`, `--admin-middle-name`, `--admin-family-name`, `--password-stdin` (the password is never a flag; without it a hidden prompt is used) |
+| `init` | Idempotent installation: creates the master key file (mode 0600) if missing, collections and indexes (`EnsureSchema`), default settings, built-in statuses, the four default request types (only on a new installation: running `init` again never brings back a type an admin deleted), the single project with its Triage group, seed hold reasons and the first administrator. Flags: `--workspace-name`, `--admin-email`, `--admin-given-name`, `--admin-middle-name`, `--admin-family-name`, `--password-stdin` (the password is never a flag; without it a hidden prompt is used) |
 | `serve` | HTTP API, outbox dispatcher and a bounded job pool. `--workers=false` serves HTTP only; `--worker-concurrency N` (1-64, default 4) |
 | `worker` | Outbox dispatcher and job workers without HTTP (`--concurrency N`). Jobs are leased in MongoDB, so several workers never run the same attempt |
 | `doctor` | Checks bootstrap configuration, master key, MongoDB (replica set), schema, installation, settings and Redis; prints `OK`, `INFO` or `FAIL` lines |

@@ -1103,15 +1103,79 @@ export interface paths {
         };
         /**
          * Request types
-         * @description **Permission:** Admins and agents. Integrations: any scope.
+         * @description By `order`. Integrations map their categories by `code`, which never changes, and send the `id` as `requestTypeId`. `inUse` (tickets carrying the type) is reported to admins; 0 for everyone else.
+         *
+         *     **Permission:** Admins and agents. Integrations: any scope.
          */
         get: operations["listRequestTypes"];
         put?: never;
+        /**
+         * Create a request type
+         * @description The new type is active and goes last. Without `code` it is derived from the name (`Service request` becomes `serviceRequest`; `API access` becomes `apiAccess`), with a number appended when that code is taken; a name that gives no valid code (another script, one letter) needs an explicit `code`. A project has at most 50 types. Audited.
+         *
+         *     **Permission:** Administrators. API tokens: never.
+         *
+         *     **Idempotency:** send `Idempotency-Key` to make retries safe; the same key with a different body returns `409 idempotencyKeyReused`.
+         */
+        post: operations["createRequestType"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/request-types/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Reorder the request types
+         * @description `ids` must name every request type of the project, active and inactive, exactly once; otherwise `409 requestTypeOrderConflict` (reload and try again). Returns every type in the new order. Audited.
+         *
+         *     **Permission:** Administrators. API tokens: never.
+         */
+        put: operations["reorderRequestTypes"];
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/request-types/{t}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a request type
+         * @description Refused with `409 requestTypeInUse` while any ticket carries the type (tickets are never deleted: deactivate it instead), and with `409 requestTypeLastActive` for the only active type. Audited.
+         *
+         *     **Permission:** Administrators. API tokens: never.
+         *
+         *     **Versioning:** send `If-Match` with the resource's current `version`; a stale version returns `409 versionConflict`.
+         */
+        delete: operations["deleteRequestType"];
+        options?: never;
+        head?: never;
+        /**
+         * Rename, deactivate or reactivate a request type
+         * @description The `code` never changes (it is rejected as an unknown field). Names are unique ignoring case, also among inactive types. Deactivating hides the type from pickers and refuses it on new and changed tickets; tickets that carry it keep it. A request that changes nothing returns the type unchanged, without an audit event.
+         *
+         *     **Permission:** Administrators. API tokens: never.
+         *
+         *     **Versioning:** send `If-Match` with the resource's current `version`; a stale version returns `409 versionConflict`.
+         */
+        patch: operations["patchRequestType"];
         trace?: never;
     };
     "/api/v1/search": {
@@ -2371,7 +2435,7 @@ export interface components {
             includeAttachments?: boolean | null;
             /** @description Defaults to the original's priority. */
             priority?: number | null;
-            /** @description Defaults to the original's request type. */
+            /** @description Defaults to the original's request type (the default type when that one is inactive). An inactive type is refused. */
             requestTypeId?: string | null;
             /** @description Defaults to the original's subject. */
             subject?: string | null;
@@ -2395,6 +2459,12 @@ export interface components {
             /** @description Any combination of scopes (GET /integration-scopes describes each). tickets:comment, tickets:internal, tickets:write or tickets:all make the token act as support staff under its name; without them it acts for the requester side and sees public content only. */
             scopes: ("tickets:read" | "tickets:create" | "tickets:replyAsRequester" | "tickets:comment" | "tickets:internal" | "tickets:write" | "tickets:all" | "contacts:read" | "contacts:write" | "tags:read" | "tags:write" | "holdReasons:read" | "holdReasons:write" | "organisations:read" | "organisations:write")[];
         };
+        CreateRequestTypeRequest: {
+            /** @description Optional. 2 to 40 letters and digits, starting with a lowercase letter; unique in the project. Derived from the name when omitted ("Service request" becomes serviceRequest). */
+            code?: string;
+            /** @description 1 to 60 characters; unique in the project (case-insensitive), also among inactive types. */
+            name?: string;
+        };
         CreateTagRequest: {
             /** @description Normalized like ticket tags: trimmed, lower case, inner spaces become '-'. */
             name: string;
@@ -2408,6 +2478,7 @@ export interface components {
             /** @description Optional: the organisation (from POST /organisations) this ticket belongs to. Set explicitly; it is not taken from the requester. */
             organisationId?: string | null;
             priority?: number | null;
+            /** @description An active request type; defaults to the first active one. An inactive type is 422 (inactive). */
             requestTypeId?: string | null;
             /** @description An existing contactId, or name and email (plus optional externalId) to find or create the contact. */
             requester: components["schemas"]["RequesterRequest"];
@@ -2516,7 +2587,7 @@ export interface components {
             /** @description Defaults to the original's group (Triage when inactive). */
             groupId?: string | null;
             priority?: number | null;
-            /** @description Defaults to the original's request type. */
+            /** @description Defaults to the original's request type (the default type when that one is inactive). An inactive type is refused. */
             requestTypeId?: string | null;
             /** @description Defaults to the original ticket's subject. */
             subject?: string | null;
@@ -2801,12 +2872,18 @@ export interface components {
         PatchProjectRequest: {
             requesterAcknowledgement?: boolean | null;
         };
+        PatchRequestTypeRequest: {
+            /** @description false deactivates the type, true reactivates it. The last active type cannot be deactivated. */
+            active?: boolean | null;
+            name?: string | null;
+        };
         PatchTicketRequest: {
             /** @description Staff only. Replaces the CC addresses (up to 10; lower-cased and deduplicated; not the requester's address); an empty list clears them. */
             ccEmails?: string[] | null;
             /** @description Staff only. Links the ticket to an organisation; an empty string clears it. Signed-in users get 403 organisationManagedByIntegration when the ticket was created through the API or MCP; only integration credentials may change it. */
             organisationId?: string | null;
             priority?: number | null;
+            /** @description An active request type. A ticket that already carries an inactive type keeps it. */
             requestTypeId?: string | null;
             subject?: string | null;
             tags?: string[] | null;
@@ -2996,6 +3073,10 @@ export interface components {
             /** @description Why the ticket goes back to the group queue (3–500 characters; rule ticket.releaseReason). Recorded in the audit log and shown in the activity timeline. */
             reason: string;
         };
+        ReorderRequestTypesRequest: {
+            /** @description Every request type of the project, active and inactive, once each, in the wanted order. */
+            ids?: string[];
+        };
         ReportBacklog: {
             byGroup: components["schemas"]["Count"][];
             byPriority: components["schemas"]["Count"][];
@@ -3045,6 +3126,30 @@ export interface components {
             slaBreaches: components["schemas"]["ReportBreaches"];
         };
         RequestType: {
+            /** @description An inactive type cannot be set on a ticket; tickets that already carry it keep it. */
+            active: boolean;
+            /** @description Stable identifier chosen at creation (letters and digits, starting with a lowercase letter); it never changes. Integrations map by code. */
+            code: string;
+            /** Format: date-time */
+            createdAt: string;
+            id: string;
+            /**
+             * Format: int64
+             * @description Tickets carrying this type, in any status. Reported to admins; 0 for everyone else.
+             */
+            inUse: number;
+            name: string;
+            /** @description Position in the list; lower comes first. */
+            order: number;
+            /**
+             * Format: int64
+             * @description Send as If-Match when changing or deleting.
+             */
+            version: number;
+        };
+        RequestTypeRef: {
+            /** @description The type's code, which never changes. */
+            code: string;
             id: string;
             name: string;
         };
@@ -3371,7 +3476,7 @@ export interface components {
             /** @description 1 critical, 2 high, 3 normal, 4 low. */
             priority: number;
             projectId: string;
-            requestType: components["schemas"]["Ref"];
+            requestType: components["schemas"]["RequestTypeRef"];
             requestedPriority: number | null;
             requester: components["schemas"]["ContactRef"];
             /** Format: date-time */
@@ -7906,7 +8011,10 @@ export interface operations {
     };
     listRequestTypes: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `true` (default; what pickers use), `false` or `all`. */
+                active?: "true" | "false" | "all";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -7935,6 +8043,376 @@ export interface operations {
             };
             /** @description The operation is visible but not permitted for this role or integration scope. Codes: `mfaEnrolmentRequired`. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Valid JSON that fails field rules; `errors` lists each field. Codes: `validationFailed`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createRequestType: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Makes the create safe to retry (1–200 printable ASCII characters, retained 24 hours).
+                 * @example 4f1c2b8e-create-ticket
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "code": "billing",
+                 *       "name": "Billing"
+                 *     }
+                 */
+                "application/json": components["schemas"]["CreateRequestTypeRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestType"];
+                };
+            };
+            /** @description Malformed request (invalid JSON, If-Match or header). Codes: `malformedJson`. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not authenticated, or the token is invalid, expired or revoked. Codes: `authenticationRequired`, `invalidToken`. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The operation is visible but not permitted for this role or integration scope. Codes: `forbidden`, `insufficientScope`, `mfaEnrolmentRequired`, `userRequired`. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Conflict with the current state (versions, business rules, idempotency). Codes: `idempotencyInProgress`, `idempotencyKeyReused`, `requestTypeCodeExists`, `requestTypeExists`, `requestTypeLimitReached`. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request body or upload is too large. Codes: `bodyTooLarge`. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Valid JSON that fails field rules; `errors` lists each field. Codes: `validationFailed`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    reorderRequestTypes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReorderRequestTypesRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["RequestType"][];
+                    };
+                };
+            };
+            /** @description Malformed request (invalid JSON, If-Match or header). Codes: `malformedJson`. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not authenticated, or the token is invalid, expired or revoked. Codes: `authenticationRequired`, `invalidToken`. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The operation is visible but not permitted for this role or integration scope. Codes: `forbidden`, `insufficientScope`, `mfaEnrolmentRequired`, `userRequired`. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Conflict with the current state (versions, business rules, idempotency). Codes: `requestTypeOrderConflict`. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request body or upload is too large. Codes: `bodyTooLarge`. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Valid JSON that fails field rules; `errors` lists each field. Codes: `validationFailed`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteRequestType: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description The version being changed: a number, or an entity tag such as "3" or W/"3".
+                 * @example 3
+                 */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                /** @description Ticket number (e.g. `42`; `#42` URL-encoded as `%2342` also works) or ID. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Malformed request (invalid JSON, If-Match or header). Codes: `invalidIfMatch`. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not authenticated, or the token is invalid, expired or revoked. Codes: `authenticationRequired`, `invalidToken`. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The operation is visible but not permitted for this role or integration scope. Codes: `forbidden`, `insufficientScope`, `mfaEnrolmentRequired`, `userRequired`. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not found, or not visible to the caller (existence is hidden). Codes: `requestTypeNotFound`. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Conflict with the current state (versions, business rules, idempotency). Codes: `requestTypeInUse`, `requestTypeLastActive`, `versionConflict`. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description If-Match is required. Codes: `preconditionRequired`. */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    patchRequestType: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description The version being changed: a number, or an entity tag such as "3" or W/"3".
+                 * @example 3
+                 */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                /** @description Ticket number (e.g. `42`; `#42` URL-encoded as `%2342` also works) or ID. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "name": "Billing and refunds"
+                 *     }
+                 */
+                "application/json": components["schemas"]["PatchRequestTypeRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestType"];
+                };
+            };
+            /** @description Malformed request (invalid JSON, If-Match or header). Codes: `invalidIfMatch`, `malformedJson`. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not authenticated, or the token is invalid, expired or revoked. Codes: `authenticationRequired`, `invalidToken`. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The operation is visible but not permitted for this role or integration scope. Codes: `forbidden`, `insufficientScope`, `mfaEnrolmentRequired`, `userRequired`. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not found, or not visible to the caller (existence is hidden). Codes: `requestTypeNotFound`. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Conflict with the current state (versions, business rules, idempotency). Codes: `requestTypeExists`, `requestTypeLastActive`, `versionConflict`. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request body or upload is too large. Codes: `bodyTooLarge`. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Valid JSON that fails field rules; `errors` lists each field. Codes: `validationFailed`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description If-Match is required. Codes: `preconditionRequired`. */
+            428: {
                 headers: {
                     [name: string]: unknown;
                 };

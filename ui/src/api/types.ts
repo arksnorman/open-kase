@@ -118,7 +118,7 @@ export interface Ticket {
   priority: Priority
   requestedPriority: Priority | null
   status: TicketStatus
-  requestType: { id: string; name: string }
+  requestType: { id: string; code: string; name: string }
   watching: boolean
   watcherCount: number
   /** Send as `expectedLastPublicId` when posting so a newer reply is never overlooked. */

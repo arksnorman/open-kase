@@ -794,7 +794,7 @@
             ]
           },
           "requestTypeId": {
-            "description": "Defaults to the original's request type.",
+            "description": "Defaults to the original's request type (the default type when that one is inactive). An inactive type is refused.",
             "type": [
               "string",
               "null"
@@ -976,6 +976,7 @@
             ]
           },
           "requestTypeId": {
+            "description": "An active request type; defaults to the first active one. An inactive type is 422 (inactive).",
             "type": [
               "string",
               "null"
@@ -1399,7 +1400,7 @@
             ]
           },
           "requestTypeId": {
-            "description": "Defaults to the original's request type.",
+            "description": "Defaults to the original's request type (the default type when that one is inactive). An inactive type is refused.",
             "type": [
               "string",
               "null"
@@ -2442,6 +2443,7 @@
             ]
           },
           "requestTypeId": {
+            "description": "An active request type. A ticket that already carries an inactive type keeps it.",
             "type": [
               "string",
               "null"

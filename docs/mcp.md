@@ -152,6 +152,11 @@ Common arguments:
 | `organisationsUpdate` | not destructive | `organisationId`, `name?`, `externalRef?` (empty clears), `active?` (false deactivates), `expectedVersion?` | `Organisation` |
 | `organisationsDelete` | destructive | `organisationId`, `expectedVersion?` | `{ deleted }`; `organisationInUse` while a contact or ticket references it |
 
+Ticket results carry `requestType` `{ id, code, name }`; integrations map by `code`, which never changes. There are no
+request type tools: managing them is for admins in the web app, and the list (`GET /request-types`) is REST only.
+`requestTypeId` must name an active type (otherwise `validationFailed` on `requestTypeId`); without it a new ticket gets
+the first active request type.
+
 Scheduled sending, watchers and links are not available through MCP (REST only, signed-in users).
 
 The audience is never inferred: `ticketsAddNote` without `audience: "agent"` and `ticketsReply` without
