@@ -108,6 +108,7 @@ var pathParams = map[string]string{
 	"l":          "Ticket link ID.",
 	"msg":        "Message ID.",
 	"name":       "Tag name (normalized).",
+	"rt":         "Request type ID.",
 }
 
 // ---- Schema reflection ----

@@ -148,6 +148,31 @@ func TestSeedDemoIsIdempotent(t *testing.T) {
 	}
 }
 
+// The demo data names seeded request types by code; one an admin deactivated is not a reason to fail.
+func TestSeedDemoWithADeactivatedRequestType(t *testing.T) {
+	h := newHarness(t)
+	admin := h.admin()
+	for _, rt := range h.do("GET", "/api/v1/request-types", nil, bearer(admin.Access)).expect(200).Items() {
+		if rt["code"] == "serviceRequest" {
+			h.do("PATCH", "/api/v1/request-types/"+rt["id"].(string), map[string]any{"active": false},
+				bearer(admin.Access), ifMatchV(int64(rt["version"].(float64)))).expect(200)
+		}
+	}
+	var out bytes.Buffer
+	if err := seedDemo(context.Background(), h.c, seedOptions{}, &out); err != nil {
+		t.Fatalf("seed: %v\n%s", err, out.String())
+	}
+	tickets := h.do("GET", "/api/v1/tickets?limit=100", nil, bearer(admin.Access)).expect(200).Items()
+	if len(tickets) != 10 {
+		t.Fatalf("%d tickets", len(tickets))
+	}
+	for _, tk := range tickets {
+		if code := tk["requestType"].(map[string]any)["code"]; code == "serviceRequest" {
+			t.Fatalf("ticket %v got the deactivated type", tk["number"])
+		}
+	}
+}
+
 func TestSeedDemoRefusesProduction(t *testing.T) {
 	t.Setenv("APP_ENV", "production")
 	var out, errOut bytes.Buffer

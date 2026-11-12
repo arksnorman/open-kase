@@ -1146,7 +1146,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/request-types/{t}": {
+    "/api/v1/request-types/{rt}": {
         parameters: {
             query?: never;
             header?: never;
@@ -8242,8 +8242,8 @@ export interface operations {
                 "If-Match": components["parameters"]["IfMatch"];
             };
             path: {
-                /** @description Ticket number (e.g. `42`; `#42` URL-encoded as `%2342` also works) or ID. */
-                t: string;
+                /** @description Request type ID. */
+                rt: string;
             };
             cookie?: never;
         };
@@ -8323,8 +8323,8 @@ export interface operations {
                 "If-Match": components["parameters"]["IfMatch"];
             };
             path: {
-                /** @description Ticket number (e.g. `42`; `#42` URL-encoded as `%2342` also works) or ID. */
-                t: string;
+                /** @description Request type ID. */
+                rt: string;
             };
             cookie?: never;
         };

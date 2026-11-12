@@ -228,6 +228,8 @@ async function mutate(run: (t: Ticket) => Promise<Ticket | void>, opts: { fresh?
     if (err instanceof ApiError && (err.status === 409 || err.status === 404 || err.status === 403 || err.status === 422)) {
       await ticketQ.refetch()
     }
+    // The chosen type was deactivated or deleted meanwhile: load the current list for the picker.
+    if (err instanceof ApiError && err.field('requestTypeId')) invalidate('request-types')
     // Inline (Details panel) edits show the problem beside the field instead of the banner.
     if (opts.inline) throw describeError(err)
     return false

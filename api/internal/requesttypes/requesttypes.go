@@ -69,6 +69,7 @@ type Update struct {
 
 // Plan is what one management command writes. A zero Plan writes nothing.
 type Plan struct {
+	// Insert is a type to add; the repository sets its Id.
 	Insert *Type
 	Update []Update
 	// Delete is the ID of a type to remove; the repository refuses it with

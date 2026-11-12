@@ -82,12 +82,14 @@ async function loadGroups(): Promise<GroupRef[]> {
     return workspace.myGroups // may include an inactive group; the ticket's own is checked below
   }
 }
+const loadRequestTypes = (): Promise<SelectOption<string>[]> =>
+  ticketsApi.requestTypes().then((r) => r.items.map((x) => ({ value: x.id, label: x.name })), () => [])
 async function loadAll() {
   const token = ++loadToken
   const [o, g, rt, tg] = await Promise.all([
     loadOriginal(),
     loadGroups(),
-    ticketsApi.requestTypes().then((r) => r.items.map((x) => ({ value: x.id, label: x.name })), () => []),
+    loadRequestTypes(),
     tagsApi.list().then((r) => r.items.map((x) => ({ value: x.tag, label: x.tag })), () => []),
   ])
   if (token !== loadToken) return
@@ -186,6 +188,11 @@ async function submit() {
     await router.push(ticketRoute(created))
   } catch (err) {
     error.value = err
+    // The chosen type was deactivated or deleted meanwhile: drop it and load the current list.
+    if (err instanceof ApiError && err.field('requestTypeId')) {
+      requestTypeId.value = ''
+      requestTypes.value = await loadRequestTypes()
+    }
   } finally {
     saving.value = false
   }

@@ -11208,15 +11208,15 @@
         ]
       }
     },
-    "/api/v1/request-types/{t}": {
+    "/api/v1/request-types/{rt}": {
       "delete": {
         "description": "Refused with `409 requestTypeInUse` while any ticket carries the type (tickets are never deleted: deactivate it instead), and with `409 requestTypeLastActive` for the only active type. Audited.\n\n**Permission:** Administrators. API tokens: never.\n\n**Versioning:** send `If-Match` with the resource's current `version`; a stale version returns `409 versionConflict`.",
         "operationId": "deleteRequestType",
         "parameters": [
           {
-            "description": "Ticket number (e.g. `42`; `#42` URL-encoded as `%2342` also works) or ID.",
+            "description": "Request type ID.",
             "in": "path",
-            "name": "t",
+            "name": "rt",
             "required": true,
             "schema": {
               "type": "string"
@@ -11306,9 +11306,9 @@
         "operationId": "patchRequestType",
         "parameters": [
           {
-            "description": "Ticket number (e.g. `42`; `#42` URL-encoded as `%2342` also works) or ID.",
+            "description": "Request type ID.",
             "in": "path",
-            "name": "t",
+            "name": "rt",
             "required": true,
             "schema": {
               "type": "string"

@@ -209,7 +209,7 @@ func operations() []op {
 			Description: "The new type is active and goes last. Without `code` it is derived from the name (`Service request` becomes `serviceRequest`; `API access` becomes `apiAccess`), " +
 				"with a number appended when that code is taken; a name that gives no valid code (another script, one letter) needs an explicit `code`. A project has at most 50 types. Audited.",
 			Example: map[string]any{"name": "Billing", "code": "billing"}},
-		{Method: "PATCH", Path: "/api/v1/request-types/:t", Id: "patchRequestType", Tag: "Project", Summary: "Rename, deactivate or reactivate a request type", Auth: authUser,
+		{Method: "PATCH", Path: "/api/v1/request-types/:rt", Id: "patchRequestType", Tag: "Project", Summary: "Rename, deactivate or reactivate a request type", Auth: authUser,
 			Permission: permAdmin + " API tokens: never.", Request: patchRequestTypeBody{}, Response: requestTypeDTO{}, IfMatch: ifMatchRequired,
 			Errors: []errSpec{errForbidden, {404, []string{"requestTypeNotFound"}}, {409, []string{"requestTypeExists", "requestTypeLastActive"}}, {422, []string{"validationFailed"}}},
 			Description: "The `code` never changes (it is rejected as an unknown field). Names are unique ignoring case, also among inactive types. " +
@@ -220,7 +220,7 @@ func operations() []op {
 			Errors: []errSpec{errForbidden, {409, []string{"requestTypeOrderConflict"}}, {422, []string{"validationFailed"}}},
 			Description: "`ids` must name every request type of the project, active and inactive, exactly once; otherwise `409 requestTypeOrderConflict` (reload and try again). " +
 				"Returns every type in the new order. Audited."},
-		{Method: "DELETE", Path: "/api/v1/request-types/:t", Id: "deleteRequestType", Tag: "Project", Summary: "Delete a request type", Auth: authUser,
+		{Method: "DELETE", Path: "/api/v1/request-types/:rt", Id: "deleteRequestType", Tag: "Project", Summary: "Delete a request type", Auth: authUser,
 			Permission: permAdmin + " API tokens: never.", IfMatch: ifMatchRequired,
 			Errors:      []errSpec{errForbidden, {404, []string{"requestTypeNotFound"}}, {409, []string{"requestTypeInUse", "requestTypeLastActive"}}},
 			Description: "Refused with `409 requestTypeInUse` while any ticket carries the type (tickets are never deleted: deactivate it instead), and with `409 requestTypeLastActive` for the only active type. Audited."},

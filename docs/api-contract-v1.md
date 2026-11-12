@@ -230,8 +230,8 @@ unique; `maxDays` 1-365; at most 100). A new `maxDays` affects only later holds;
 `409 holdReasonInUse` while a ticket is on hold with the reason. `init` seeds six common reasons once.
 
 **Request types.** Every ticket has exactly one. Admins manage them (no token scope; API tokens get `403`):
-`POST /request-types` `{ name, code? }` (`201`), `PATCH /request-types/{t}` `{ name?, active? }` with **If-Match**,
-`PUT /request-types/order` `{ ids }` and `DELETE /request-types/{t}` with **If-Match** (`204`). Each type has a `code`
+`POST /request-types` `{ name, code? }` (`201`), `PATCH /request-types/{rt}` `{ name?, active? }` with **If-Match**,
+`PUT /request-types/order` `{ ids }` and `DELETE /request-types/{rt}` with **If-Match** (`204`). Each type has a `code`
 (2-40 letters and digits, starting with a lowercase letter) that never changes: integrations map by `code`, so a
 rename breaks nothing. Without `code` it is derived from the name (`Service request` becomes `serviceRequest`,
 `API access` becomes `apiAccess`; a number is appended when the code is taken; a name that gives no valid code,

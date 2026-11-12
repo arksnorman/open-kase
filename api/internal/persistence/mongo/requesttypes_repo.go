@@ -62,7 +62,7 @@ func (r *RequestTypesRepository) List(ctx context.Context, workspaceID, projectI
 		cur, err := r.store.col(colTickets).Aggregate(ctx, bson.A{
 			bson.D{{Key: "$match", Value: bson.D{{Key: "projectId", Value: pid}}}},
 			bson.D{{Key: "$group", Value: bson.D{{Key: "_id", Value: "$requestTypeId"}, {Key: "count", Value: bson.D{{Key: "$sum", Value: 1}}}}}},
-		})
+		}, options.Aggregate().SetHint("projectRequestType")) // counted from the index, without reading tickets
 		if err != nil {
 			return nil, err
 		}

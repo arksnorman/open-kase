@@ -597,9 +597,13 @@ func (s *seeder) seedTicket(ctx context.Context, requester access.Principal, t s
 		}
 		attIDs = []string{a.Id}
 	}
-	contactID, groupID, rtID := contacts[t.requester], groups[t.group], types[t.requestType]
+	contactID, groupID := contacts[t.requester], groups[t.group]
 	in := tickets.CreateInput{Subject: t.subject, Body: first.body, Requester: tickets.RequesterInput{ContactId: &contactID},
-		GroupId: &groupID, RequestTypeId: &rtID, AttachmentIds: attIDs}
+		GroupId: &groupID, AttachmentIds: attIDs}
+	// A seeded type an admin deleted or deactivated: the ticket gets the default type.
+	if id, ok := types[t.requestType]; ok {
+		in.RequestTypeId = &id
+	}
 	if id, ok := s.orgs[emailDomain(t.requester)]; ok {
 		in.OrganisationId = &id
 	}

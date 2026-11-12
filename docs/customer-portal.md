@@ -124,6 +124,8 @@ never on its name: an admin can rename a type, but its `code` never changes.
    order.
 4. Read `requestType.code` on a ticket (`GET /tickets/{t}`, lists) and in the `ticket.created` and `ticket.updated`
    webhook payloads to map back to your category. A ticket keeps its type when an admin deactivates it, and it is still
-   returned with the same `code`.
-5. An admin can deactivate a type at any time. A create that names an inactive type is refused with `422` on `requestTypeId`
-   (code `inactive`): read the list again, and fall back to a category you can still map or omit `requestTypeId`.
+   returned with the same `code`. A `ticket.updated` payload carries only `requestType.id` when the ticket's type has
+   changed again since that event; ignore it, the event for the later change has the `code`.
+5. An admin can deactivate or delete a type at any time. A create that names such a type is refused with `422` on
+   `requestTypeId` (code `inactive`, or `notFound` for a deleted type): read the list again, and fall back to a category
+   you can still map or omit `requestTypeId`.

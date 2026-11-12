@@ -13,8 +13,8 @@ func registerRequestTypes(p *gin.RouterGroup, a *api) {
 	p.GET("/request-types", a.listRequestTypes)
 	p.POST("/request-types", a.idempotent(a.createRequestType))
 	p.PUT("/request-types/order", a.reorderRequestTypes)
-	p.PATCH("/request-types/:t", a.patchRequestType)
-	p.DELETE("/request-types/:t", a.deleteRequestType)
+	p.PATCH("/request-types/:rt", a.patchRequestType)
+	p.DELETE("/request-types/:rt", a.deleteRequestType)
 }
 
 type requestTypeDTO struct {
@@ -88,7 +88,7 @@ func (a *api) patchRequestType(c *gin.Context) {
 	if !ok {
 		return
 	}
-	t, err := a.RequestTypes.Update(c.Request.Context(), s, c.Param("t"), version, requesttypes.UpdateInput{Name: body.Name, Active: body.Active})
+	t, err := a.RequestTypes.Update(c.Request.Context(), s, c.Param("rt"), version, requesttypes.UpdateInput{Name: body.Name, Active: body.Active})
 	respond(c, http.StatusOK, toRequestType(t), err)
 }
 
@@ -114,5 +114,5 @@ func (a *api) deleteRequestType(c *gin.Context) {
 	if !ok {
 		return
 	}
-	respond(c, http.StatusNoContent, nil, a.RequestTypes.Delete(c.Request.Context(), s, c.Param("t"), version))
+	respond(c, http.StatusNoContent, nil, a.RequestTypes.Delete(c.Request.Context(), s, c.Param("rt"), version))
 }

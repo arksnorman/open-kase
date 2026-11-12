@@ -403,7 +403,7 @@ export const holdReasonsApi = {
 const rtp = (id: string) => `/request-types/${seg(id)}`
 export const requestTypesApi = {
   /** Every type of the project in order; `all` includes the inactive ones (`inUse` is filled for admins). */
-  list: (active: 'true' | 'false' | 'all' = 'all', o: Sig = {}) =>
+  list: (active: 'true' | 'false' | 'all', o: Sig = {}) =>
     api.get<ItemsResponse<RequestType>>(`/request-types`, { ...o, query: { active } }),
   create: (input: RequestTypeInput) => api.post<RequestType>(`/request-types`, input, { idempotencyKey: true }),
   update: (type: RequestType, input: RequestTypeInput) => api.patch<RequestType>(rtp(type.id), input, { ifMatch: type.version }),

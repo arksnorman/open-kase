@@ -101,6 +101,11 @@ async function submit() {
     await router.replace(ticketRoute(t))
   } catch (err) {
     error.value = err
+    // The chosen type was deactivated or deleted meanwhile: drop it and load the current list.
+    if (err instanceof ApiError && err.field('requestTypeId')) {
+      requestTypeId.value = ''
+      invalidate('request-types')
+    }
   } finally {
     submitting.value = false
   }

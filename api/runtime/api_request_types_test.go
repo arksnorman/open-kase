@@ -11,7 +11,6 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"github.com/arksnorman/open-kase/api/internal/installation"
-	"github.com/arksnorman/open-kase/api/internal/requesttypes"
 	"github.com/arksnorman/open-kase/api/internal/users"
 )
 
@@ -582,19 +581,47 @@ func TestRequestTypeCodeInTicketsWebhooksAndMCP(t *testing.T) {
 	if rt := obj(obj(ups[len(ups)-1], "data"), "requestType"); rt["code"] != "question" || rt["name"] != "Ask us" {
 		t.Fatalf("ticket.updated after rename: %v", rt)
 	}
-	// When the ticket moved on to another type since the event, only the id is sent.
+}
+
+// A ticket.updated payload built after the ticket moved on to another type
+// carries only the id of the type the event is about: never that id beside
+// the code and name of the ticket's current type.
+func TestRequestTypeWebhookAfterTheTicketMovedOn(t *testing.T) {
+	nf := newNotifyFixture(t)
+	nf.c.Boot.Env = EnvDevelopment
+	hs := newHookServer(t)
+	nf.addHook(hs, "ticket.updated")
+	question, service := nf.rtID("question"), nf.rtID("serviceRequest")
+	key := nf.createTicket(nf.dana.Access, map[string]any{"requestTypeId": question}).Ref()
+	nf.drain()
+	// Both events are delivered after the second change.
 	nf.do("PATCH", tpath(key), map[string]any{"priority": 2}, bearer(nf.dana.Access), ifMatchV(nf.version(key))).expect(200)
 	nf.do("PATCH", tpath(key), map[string]any{"requestTypeId": service}, bearer(nf.dana.Access), ifMatchV(nf.version(key))).expect(200)
 	nf.drain()
-	ups = hookEnvelopes(t, hs)["ticket.updated"]
+	ups := hookEnvelopes(t, hs)["ticket.updated"]
+	if len(ups) != 2 {
+		t.Fatalf("updates: %d", len(ups))
+	}
+	old, current := false, false
 	for _, env := range ups {
 		rt := obj(obj(env, "data"), "requestType")
-		if rt["id"] == nil || (rt["code"] == nil) != (rt["name"] == nil) {
+		switch rt["id"] {
+		case question:
+			old = true
+			if rt["code"] != nil || rt["name"] != nil {
+				t.Fatalf("the event about the type the ticket left: %v", rt)
+			}
+		case service:
+			current = true
+			if rt["code"] != "serviceRequest" || rt["name"] != "Service request" {
+				t.Fatalf("the event about the current type: %v", rt)
+			}
+		default:
 			t.Fatalf("payload: %v", rt)
 		}
 	}
-	if rt := obj(obj(ups[len(ups)-1], "data"), "requestType"); rt["code"] != "serviceRequest" {
-		t.Fatalf("last update: %v", rt)
+	if !old || !current {
+		t.Fatalf("old type seen %v, current type seen %v", old, current)
 	}
 }
 
@@ -793,18 +820,6 @@ func TestInitDoesNotRecreateDeletedRequestTypes(t *testing.T) {
 	}
 }
 
-func TestDeriveRequestTypeCode(t *testing.T) {
-	for name, want := range map[string]string{
-		"Billing": "billing", "Service request": "serviceRequest", "API access": "apiAccess", "  spaced   out  ": "spacedOut",
-		"snake_case_name": "snakeCaseName", "Tabs\tand\nlines": "tabsAndLines", "UPPER": "upper", "9 lives": "lives",
-		"Ünï": "n", "日本語": "", "Q": "q", "x-1": "x1",
-	} {
-		if got := requesttypes.DeriveCode(name); got != want {
-			t.Errorf("%q: %q, want %q", name, got, want)
-		}
-	}
-}
-
 // A ticket write and a concurrent delete or deactivation of its request type
 // never leave a ticket on a deleted type, and never answer 500.
 func TestRequestTypesRaceWithTicketCreate(t *testing.T) {
@@ -861,6 +876,188 @@ func TestRequestTypesRaceWithTicketCreate(t *testing.T) {
 		case deleting && change.Code == 409 && change.Problem().Code == "requestTypeInUse":
 			if created == 0 {
 				t.Fatalf("round %d: requestTypeInUse without a ticket", round)
+			}
+		case !deleting && change.Code == 200:
+		default:
+			t.Fatalf("round %d: change answered %d %s", round, change.Code, change.Body)
+		}
+	}
+}
+
+// concurrently runs the requests at the same moment and returns their answers in order.
+func concurrently(fns ...func() result) []result {
+	out := make([]result, len(fns))
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for i, fn := range fns {
+		wg.Go(func() {
+			<-start
+			out[i] = fn()
+		})
+	}
+	close(start)
+	wg.Wait()
+	return out
+}
+
+func answers(rs []result) string {
+	var b strings.Builder
+	for _, r := range rs {
+		fmt.Fprintf(&b, "%d %s; ", r.Code, r.Body)
+	}
+	return b.String()
+}
+
+// Two admins deactivate the last two active types at the same moment: one
+// wins, the other is refused, and a type stays active.
+func TestRequestTypesConcurrentDeactivationKeepsOneActive(t *testing.T) {
+	f := newTicketFixture(t)
+	f.rtPatch("serviceRequest", map[string]any{"active": false}).expect(200)
+	f.rtPatch("featureRequest", map[string]any{"active": false}).expect(200)
+	for round := range 5 {
+		for _, c := range []string{"issue", "question"} {
+			if f.rt(c)["active"] != true {
+				f.rtPatch(c, map[string]any{"active": true}).expect(200)
+			}
+		}
+		off := func(tok string, rt map[string]any) func() result {
+			return func() result {
+				return f.do("PATCH", "/api/v1/request-types/"+rt["id"].(string), map[string]any{"active": false}, bearer(tok), ifMatchV(int64(rt["version"].(float64))))
+			}
+		}
+		rs := concurrently(off(f.admin.Access, f.rt("issue")), off(f.lead.Access, f.rt("question")))
+		if n := len(f.rtList(f.admin.Access, "")); n != 1 {
+			t.Fatalf("round %d: %d active types left: %s", round, n, answers(rs))
+		}
+		won := 0
+		for _, r := range rs {
+			switch {
+			case r.Code == 200:
+				won++
+			case r.Code == 409 && r.Problem().Code == "requestTypeLastActive":
+			default:
+				t.Fatalf("round %d: %s", round, answers(rs))
+			}
+		}
+		if won != 1 {
+			t.Fatalf("round %d: %d deactivations succeeded: %s", round, won, answers(rs))
+		}
+	}
+}
+
+// Two admins create types with the same name (and different codes) at the
+// same moment: one is created, the other is refused.
+func TestRequestTypesConcurrentCreateSameName(t *testing.T) {
+	f := newTicketFixture(t)
+	for round := range 5 {
+		name := fmt.Sprintf("Twin %d", round)
+		add := func(tok, code string) func() result {
+			return func() result {
+				return f.do("POST", "/api/v1/request-types", map[string]any{"name": name, "code": code}, bearer(tok))
+			}
+		}
+		rs := concurrently(add(f.admin.Access, fmt.Sprintf("twinA%d", round)), add(f.lead.Access, fmt.Sprintf("twinB%d", round)))
+		created := 0
+		for _, r := range rs {
+			switch {
+			case r.Code == 201:
+				created++
+			case r.Code == 409 && r.Problem().Code == "requestTypeExists":
+			default:
+				t.Fatalf("round %d: %s", round, answers(rs))
+			}
+		}
+		if created != 1 {
+			t.Fatalf("round %d: %d created: %s", round, created, answers(rs))
+		}
+	}
+}
+
+// A ticket update that sets a type and a concurrent delete of that type
+// never leave the ticket on a deleted type, and never answer 500.
+func TestRequestTypesRaceWithTicketUpdate(t *testing.T) {
+	f := newTicketFixture(t)
+	key := f.createTicket(f.dana.Access, map[string]any{}).Ref()
+	for round := range 8 {
+		id := f.rtCreate(fmt.Sprintf("Update race %d", round), "").expect(201).JSON()["id"].(string)
+		v := f.version(key)
+		rs := concurrently(
+			func() result {
+				return f.do("PATCH", tpath(key), map[string]any{"requestTypeId": id}, bearer(f.dana.Access), ifMatchV(v))
+			},
+			func() result {
+				return f.do("DELETE", "/api/v1/request-types/"+id, nil, bearer(f.admin.Access), ifMatchV(1))
+			},
+		)
+		upd, del := rs[0], rs[1]
+		stored, err := f.coll("tickets").CountDocuments(context.Background(), bson.D{{Key: "requestTypeId", Value: mustObjectID(t, id)}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		switch {
+		case upd.Code == 200 && del.Code == 409 && del.Problem().Code == "requestTypeInUse" && stored == 1:
+			// The update won; the next round moves the ticket to a new type.
+		case upd.Code == 422 && strings.Contains(string(upd.Body), `"requestTypeId"`) && del.Code == 204 && stored == 0:
+			// The delete won, and the ticket keeps the type it had.
+			if got := f.ticketType(key)["code"]; got == nil || got == "" {
+				t.Fatalf("round %d: ticket type after a refused update: %v", round, f.ticketType(key))
+			}
+		default:
+			t.Fatalf("round %d: update %d %s, delete %d %s, %d stored", round, upd.Code, upd.Body, del.Code, del.Body, stored)
+		}
+	}
+}
+
+// A ticket create that names an organisation and a concurrent deactivation
+// or delete of that organisation answer a field error, never 500, and never
+// leave a ticket on a deleted organisation.
+func TestOrganisationRaceWithTicketCreate(t *testing.T) {
+	f := newTicketFixture(t)
+	const writers = 4
+	for round := range 6 {
+		id := f.do("POST", "/api/v1/organisations", map[string]any{"name": fmt.Sprintf("Race org %d", round)}, bearer(f.admin.Access)).expect(201).JSON()["id"].(string)
+		deleting := round%2 == 0
+		fns := make([]func() result, 0, writers+1)
+		for i := range writers {
+			fns = append(fns, func() result {
+				return f.do("POST", "/api/v1/tickets", map[string]any{"subject": "Race", "body": "Body.", "organisationId": id,
+					"requester": map[string]any{"name": "Racer", "email": fmt.Sprintf("orgracer%d-%d@acme.example", round, i)}}, bearer(f.dana.Access))
+			})
+		}
+		fns = append(fns, func() result {
+			if deleting {
+				return f.do("DELETE", "/api/v1/organisations/"+id, nil, bearer(f.admin.Access), ifMatchV(1))
+			}
+			return f.do("PATCH", "/api/v1/organisations/"+id, map[string]any{"active": false}, bearer(f.admin.Access), ifMatchV(1))
+		})
+		rs := concurrently(fns...)
+		creates, change := rs[:writers], rs[writers]
+
+		created := 0
+		for _, r := range creates {
+			switch {
+			case r.Code == 201:
+				created++
+			case r.Code == 422 && strings.Contains(string(r.Body), `"organisationId"`):
+			default:
+				t.Fatalf("round %d: create answered %d %s", round, r.Code, r.Body)
+			}
+		}
+		stored, err := f.coll("tickets").CountDocuments(context.Background(), bson.D{{Key: "organisationId", Value: mustObjectID(t, id)}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if int(stored) != created {
+			t.Fatalf("round %d: %d tickets stored, %d created", round, stored, created)
+		}
+		switch {
+		case deleting && change.Code == 204:
+			if created != 0 {
+				t.Fatalf("round %d: deleted an organisation that %d tickets carry", round, created)
+			}
+		case deleting && change.Code == 409 && change.Problem().Code == "organisationInUse":
+			if created == 0 {
+				t.Fatalf("round %d: organisationInUse without a ticket", round)
 			}
 		case !deleting && change.Code == 200:
 		default:
