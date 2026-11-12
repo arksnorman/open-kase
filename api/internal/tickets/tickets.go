@@ -53,6 +53,14 @@ type Ref struct {
 	Name string
 }
 
+// RequestTypeRef is a ticket's request type. The code never changes, the
+// name can.
+type RequestTypeRef struct {
+	Id   string
+	Code string
+	Name string
+}
+
 // organisationID is the ticket's organisation ID ("" when none).
 func (t Ticket) organisationID() string {
 	if t.Organisation == nil {
@@ -106,7 +114,7 @@ type Ticket struct {
 	RequestedPriority int // 0 when none was requested
 	Status            Ref
 	StatusCategory    statuses.Category
-	RequestType       Ref
+	RequestType       RequestTypeRef
 	Source            string
 	// CreatedBy is who created the ticket (a user, or the integration of
 	// an API-created ticket); only that integration may change the subject.
@@ -307,6 +315,8 @@ var (
 	ErrHoldReasonGone       = errors.New("tickets: hold reason no longer exists")
 	ErrOrganisationGone     = errors.New("tickets: organisation does not exist")
 	ErrOrganisationInactive = errors.New("tickets: organisation is inactive")
+	ErrRequestTypeGone      = errors.New("tickets: request type does not exist")
+	ErrRequestTypeInactive  = errors.New("tickets: request type is inactive")
 )
 
 // Access restricts a query to what the reader may see.

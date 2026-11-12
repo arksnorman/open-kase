@@ -156,7 +156,9 @@ var (
 		Pattern: regexp.MustCompile(`^(me|unassigned|[0-9a-f]{24})$`), Message: "Use me, unassigned or a user ID."})
 	// OrganisationActiveFilter is the list parameter `active` of GET /organisations.
 	OrganisationActiveFilter = define(Rule{Field: "organisation.activeFilter", Kind: KindEnum, Choices: []string{"true", "false", "all"}})
-	ViewDue                  = define(Rule{Field: "ticketFilter.due", Kind: KindEnum, Required: true, Choices: []string{"dueSoon", "breached", "met", "missed", "running"}})
+	// RequestTypeActiveFilter is the list parameter `active` of GET /request-types.
+	RequestTypeActiveFilter = define(Rule{Field: "requestType.activeFilter", Kind: KindEnum, Choices: []string{"true", "false", "all"}})
+	ViewDue                 = define(Rule{Field: "ticketFilter.due", Kind: KindEnum, Required: true, Choices: []string{"dueSoon", "breached", "met", "missed", "running"}})
 
 	HoldReasonName    = define(Rule{Field: "holdReason.name", Kind: KindText, Required: true, MinLen: 1, MaxLen: 80})
 	HoldReasonMaxDays = define(Rule{Field: "holdReason.maxDays", Kind: KindInt, Required: true, Min: 1, Max: 365, Message: "Use 1 to 365 days."})

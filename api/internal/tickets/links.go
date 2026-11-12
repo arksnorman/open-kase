@@ -303,7 +303,7 @@ func (s *Service) FollowUp(ctx context.Context, scope *access.ProjectScope, ref 
 	if in.Body != nil {
 		body = *in.Body
 	}
-	contactID, rtID := orig.Requester.Id, orig.RequestType.Id
+	contactID := orig.Requester.Id
 	cc := orig.CCEmails
 	if hasContact {
 		// A teammate who opens the follow-up is its requester; they are
@@ -312,7 +312,7 @@ func (s *Service) FollowUp(ctx context.Context, scope *access.ProjectScope, ref 
 		own := normalizeAddress(contact.Email)
 		cc = slices.DeleteFunc(slices.Clone(cc), func(a string) bool { return a == own })
 	}
-	cin := CreateInput{Subject: subject, Body: body, Priority: in.Priority, RequestTypeId: &rtID,
+	cin := CreateInput{Subject: subject, Body: body, Priority: in.Priority,
 		Requester: RequesterInput{ContactId: &contactID}, OrganisationId: orgIDPtr(orig), keepOrganisation: true, CCEmails: cc}
 	cin.Tags = in.Tags
 	if in.GroupId != nil {
@@ -325,8 +325,8 @@ func (s *Service) FollowUp(ctx context.Context, scope *access.ProjectScope, ref 
 	}
 	if in.RequestTypeId != nil {
 		cin.RequestTypeId = in.RequestTypeId
-	} else if _, err := s.requestType(ctx, scope, cin.RequestTypeId); err != nil {
-		cin.RequestTypeId = nil // the original's request type was removed
+	} else if cin.RequestTypeId, err = s.copiedRequestType(ctx, scope, orig.RequestType.Id); err != nil {
+		return Ticket{}, err // an inactive or removed type gives the default
 	}
 	now := s.clock.Now()
 	link := &Link{ProjectId: scope.Project.Id, TargetId: orig.Id, Type: LinkFollowUp, CreatedBy: s.actor(scope), CreatedAt: now}

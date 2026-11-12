@@ -93,10 +93,11 @@ func (s *Service) Copy(ctx context.Context, scope *access.ProjectScope, ref stri
 		}
 	}
 	if cin.RequestTypeId == nil {
-		rtID := orig.RequestType.Id
-		if _, err := s.requestType(ctx, scope, &rtID); err == nil {
-			cin.RequestTypeId = &rtID
+		rt, err := s.copiedRequestType(ctx, scope, orig.RequestType.Id)
+		if err != nil {
+			return Ticket{}, err
 		}
+		cin.RequestTypeId = rt
 	}
 	if in.Tags != nil {
 		cin.Tags = *in.Tags

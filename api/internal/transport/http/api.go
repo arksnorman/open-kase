@@ -25,6 +25,7 @@ import (
 	"github.com/arksnorman/open-kase/api/internal/organisations"
 	"github.com/arksnorman/open-kase/api/internal/projects"
 	"github.com/arksnorman/open-kase/api/internal/reports"
+	"github.com/arksnorman/open-kase/api/internal/requesttypes"
 	"github.com/arksnorman/open-kase/api/internal/settings"
 	"github.com/arksnorman/open-kase/api/internal/sla"
 	"github.com/arksnorman/open-kase/api/internal/statuses"
@@ -58,6 +59,8 @@ type Services struct {
 	Macros *macros.Service
 	// HoldReasons manages the reasons a ticket can be put on hold for.
 	HoldReasons *holdreasons.Service
+	// RequestTypes lists and manages the request types a ticket can carry.
+	RequestTypes *requesttypes.Service
 	// Organisations manages the customer organisations an integration serves.
 	Organisations *organisations.Service
 	Reports       *reports.Service

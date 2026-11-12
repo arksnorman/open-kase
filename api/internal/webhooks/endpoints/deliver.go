@@ -207,6 +207,14 @@ type refDTO struct {
 	Name string `json:"name,omitempty"`
 }
 
+// requestTypeDTO names a ticket's request type. The code never changes and
+// is the stable key for integrations.
+type requestTypeDTO struct {
+	Id   string `json:"id"`
+	Code string `json:"code,omitempty"`
+	Name string `json:"name,omitempty"`
+}
+
 type statusDTO struct {
 	Id       string `json:"id"`
 	Name     string `json:"name,omitempty"`
@@ -293,11 +301,16 @@ func (w *Deliverer) build(ctx context.Context, ep Endpoint, typ, eventID string)
 		group.Name = t.Group.Name
 	}
 
+	requestType := requestTypeDTO{Id: snap.RequestTypeId}
+	if t.RequestType.Id == snap.RequestTypeId {
+		requestType.Code, requestType.Name = t.RequestType.Code, t.RequestType.Name
+	}
+
 	switch typ {
 	case webhooks.TypeTicketCreated:
 		data["priority"], data["status"], data["group"] = snap.Priority, status, group
 		data["source"] = t.Source
-		data["requestType"] = refDTO{Id: t.RequestType.Id, Name: t.RequestType.Name}
+		data["requestType"] = requestType
 		if err := w.addRequesterContext(ctx, data, t, snap); err != nil {
 			return nil, err
 		}
@@ -311,7 +324,7 @@ func (w *Deliverer) build(ctx context.Context, ep Endpoint, typ, eventID string)
 			changes = []string{}
 		}
 		data["changes"], data["subject"], data["priority"] = changes, snap.Subject, snap.Priority
-		data["requestType"] = refDTO{Id: snap.RequestTypeId}
+		data["requestType"] = requestType
 		if data["organisation"], err = w.organisationPayload(ctx, t, snap); err != nil {
 			return nil, err
 		}

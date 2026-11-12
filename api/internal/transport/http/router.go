@@ -131,7 +131,7 @@ func registerAPI(v1 *gin.RouterGroup, a *api) {
 	p.GET("/contacts/:c", a.getContact)
 
 	p.GET("/statuses", a.listStatuses)
-	p.GET("/request-types", a.listRequestTypes)
+	registerRequestTypes(p, a)
 
 	registerTickets(p, a)
 	registerWorkflow(p, a)

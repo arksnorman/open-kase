@@ -44,22 +44,3 @@ func (r *CatalogRepository) ProjectStatuses(ctx context.Context, workspaceID, pr
 	}
 	return out, nil
 }
-
-// ProjectRequestTypes returns installation and project request types.
-func (r *CatalogRepository) ProjectRequestTypes(ctx context.Context, workspaceID, projectID string) ([]statuses.RequestType, error) {
-	type doc struct {
-		Id    bson.ObjectID `bson:"_id"`
-		Code  string        `bson:"code"`
-		Name  string        `bson:"name"`
-		Order int           `bson:"order"`
-	}
-	docs, err := findAll[doc](ctx, r.store.col(colRequestTypes), workflowFilter(workspaceID, projectID), workflowSort)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]statuses.RequestType, 0, len(docs))
-	for _, d := range docs {
-		out = append(out, statuses.RequestType{Id: d.Id.Hex(), Code: d.Code, Name: d.Name, Order: d.Order})
-	}
-	return out, nil
-}

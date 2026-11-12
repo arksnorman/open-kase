@@ -324,6 +324,9 @@ func (r *TicketsRepository) Create(ctx context.Context, cmd tickets.CreateComman
 		if err := r.touchGroup(ctx, pid, mustOID(t.Group.Id)); err != nil {
 			return err
 		}
+		if err := r.touchRequestType(ctx, mustOID(t.RequestType.Id), t.CreatedAt); err != nil {
+			return err
+		}
 		var orgID *bson.ObjectID
 		if t.Organisation != nil {
 			id := mustOID(t.Organisation.Id)
@@ -714,7 +717,7 @@ func (r *TicketsRepository) hydrate(ctx context.Context, docs []ticketDoc, viewe
 			Subject: d.Subject, CCEmails: d.CCEmails, Group: tickets.Ref{Id: d.GroupId.Hex(), Name: names[d.GroupId].name},
 			Priority: int(d.Priority), Status: tickets.Ref{Id: d.StatusId.Hex(), Name: names[d.StatusId].name},
 			StatusCategory: statuses.Category(d.StatusCategory),
-			RequestType:    tickets.Ref{Id: d.RequestTypeId.Hex(), Name: names[d.RequestTypeId].name},
+			RequestType:    tickets.RequestTypeRef{Id: d.RequestTypeId.Hex(), Code: names[d.RequestTypeId].code, Name: names[d.RequestTypeId].name},
 			Source:         d.Source, CreatedBy: audit.Actor{Type: d.CreatedBy.Type, Id: d.CreatedBy.Id, Label: d.CreatedBy.Label}, WatcherCount: int(d.WatcherCount), Watching: watched[d.Id], LastPublicId: hexOrEmpty(d.LastPublicId),
 			CreatedAt: d.CreatedAt, UpdatedAt: d.UpdatedAt, PublicUpdatedAt: d.PublicUpdatedAt, PublicActivityAt: d.PublicActivityAt, StaffActivityAt: d.StaffActivityAt,
 			ResolvedAt: d.ResolvedAt, ArchivedAt: d.ArchivedAt, Version: d.Version,
@@ -747,7 +750,7 @@ func (r *TicketsRepository) hydrate(ctx context.Context, docs []ticketDoc, viewe
 	return out, nil
 }
 
-type nameRec struct{ name, email, externalID, externalRef string }
+type nameRec struct{ name, code, email, externalID, externalRef string }
 
 // names loads display names for IDs grouped by collection.
 func (r *TicketsRepository) names(ctx context.Context, ids map[string]map[bson.ObjectID]bool) (map[bson.ObjectID]nameRec, error) {
@@ -759,7 +762,7 @@ func (r *TicketsRepository) names(ctx context.Context, ids map[string]map[bson.O
 		}
 		cur, err := r.store.col(col).Find(ctx, bson.D{{Key: "_id", Value: bson.D{{Key: "$in", Value: in}}}},
 			options.Find().SetProjection(bson.D{{Key: "name", Value: 1}, {Key: "displayName", Value: 1}, {Key: "label", Value: 1},
-				{Key: "email", Value: 1}, {Key: "externalId", Value: 1}, {Key: "externalRef", Value: 1}}))
+				{Key: "code", Value: 1}, {Key: "email", Value: 1}, {Key: "externalId", Value: 1}, {Key: "externalRef", Value: 1}}))
 		if err != nil {
 			return nil, err
 		}
@@ -768,6 +771,7 @@ func (r *TicketsRepository) names(ctx context.Context, ids map[string]map[bson.O
 			Name        string        `bson:"name"`
 			DisplayName string        `bson:"displayName"`
 			Label       string        `bson:"label"`
+			Code        string        `bson:"code"`
 			Email       string        `bson:"email"`
 			ExternalId  string        `bson:"externalId"`
 			ExternalRef string        `bson:"externalRef"`
@@ -783,7 +787,7 @@ func (r *TicketsRepository) names(ctx context.Context, ids map[string]map[bson.O
 			case colStatuses:
 				n = row.Label
 			}
-			out[row.Id] = nameRec{name: n, email: row.Email, externalID: row.ExternalId, externalRef: row.ExternalRef}
+			out[row.Id] = nameRec{name: n, code: row.Code, email: row.Email, externalID: row.ExternalId, externalRef: row.ExternalRef}
 		}
 	}
 	return out, nil
@@ -995,6 +999,11 @@ func (r *TicketsRepository) Mutate(ctx context.Context, m tickets.Mutation) (tic
 		}
 		if g := m.Changes.GroupId; g != nil {
 			if err := r.touchGroup(ctx, pid, mustOID(*g)); err != nil {
+				return err
+			}
+		}
+		if rt := m.Changes.RequestTypeId; rt != nil {
+			if err := r.touchRequestType(ctx, mustOID(*rt), m.Changes.UpdatedAt); err != nil {
 				return err
 			}
 		}
@@ -1459,4 +1468,20 @@ func (r *TicketsRepository) HoldReason(ctx context.Context, projectID, id string
 		return holdreasons.Reason{}, err
 	}
 	return d.toDomain(), nil
+}
+
+// touchRequestType proves, inside the caller's transaction, that the request
+// type exists and is active, and writes it so the ticket write conflicts with
+// a concurrent delete or deactivation.
+func (r *TicketsRepository) touchRequestType(ctx context.Context, id bson.ObjectID, now time.Time) error {
+	found, active, err := r.store.touchRequestType(ctx, id, now)
+	switch {
+	case err != nil:
+		return err
+	case !found:
+		return tickets.ErrRequestTypeGone
+	case !active:
+		return tickets.ErrRequestTypeInactive
+	}
+	return nil
 }

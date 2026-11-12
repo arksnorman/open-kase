@@ -24,6 +24,7 @@ import (
 	mongostore "github.com/arksnorman/open-kase/api/internal/persistence/mongo"
 	"github.com/arksnorman/open-kase/api/internal/projects"
 	"github.com/arksnorman/open-kase/api/internal/reports"
+	"github.com/arksnorman/open-kase/api/internal/requesttypes"
 	"github.com/arksnorman/open-kase/api/internal/settings"
 	"github.com/arksnorman/open-kase/api/internal/sla"
 	"github.com/arksnorman/open-kase/api/internal/statuses"
@@ -105,6 +106,7 @@ type Container struct {
 	SLA           *sla.Service
 	Macros        *macros.Service
 	HoldReasons   *holdreasons.Service
+	RequestTypes  *requesttypes.Service
 	Organisations *organisations.Service
 	Reports       *reports.Service
 
@@ -192,6 +194,7 @@ func (c *Container) wireBusiness(clk clock.Clock) {
 	// acquires with (tests drive both with a manual clock).
 	c.Jobs.SetNow(clk.Now)
 	c.SLA = sla.NewService(mongostore.NewSLAPolicyRepository(c.Store), clk, c.wakeJobs)
+	c.RequestTypes = requesttypes.NewService(mongostore.NewRequestTypesRepository(c.Store), clk)
 	c.Tickets = c.newTicketsService(clk)
 	c.Macros = macros.NewService(mongostore.NewMacrosRepository(c.Store), c.Tickets, clk)
 	c.HoldReasons = holdreasons.NewService(mongostore.NewHoldReasonsRepository(c.Store), clk)
@@ -203,7 +206,7 @@ func (c *Container) wireBusiness(clk clock.Clock) {
 // collaborator.
 func (c *Container) newTicketsService(clk clock.Clock) *tickets.Service {
 	return tickets.NewService(tickets.Deps{
-		Repo: c.TicketsRepo, Files: mongostore.NewAttachmentsRepository(c.Store), Catalog: c.CatalogRepo,
+		Repo: c.TicketsRepo, Files: mongostore.NewAttachmentsRepository(c.Store), Catalog: c.CatalogRepo, RequestTypes: c.RequestTypes,
 		Requesters: c.Customers, Clock: clk, Limits: c.fileLimits, SLA: c.SLA,
 		Jobs: c.Jobs, Wake: c.wakeJobs, Authors: authorScopes{c}, Signatures: signatureSource{c},
 	})
@@ -302,7 +305,7 @@ func (c *Container) httpServices() transporthttp.Services {
 		Auth: c.Auth, Integrations: c.Integrations, Access: c.Access, Users: c.Users, Projects: c.Projects,
 		Customers: c.Customers, Settings: c.Settings, Workflow: c.Workflow, Tickets: c.Tickets, Idempotency: c.Idempotency, Clock: c.Clock,
 		Notifications: c.Notifications, Webhooks: c.Webhooks,
-		SLA: c.SLA, Macros: c.Macros, HoldReasons: c.HoldReasons, Organisations: c.Organisations, Reports: c.Reports, AuditLog: auditlog.NewService(mongostore.NewAuditLogRepository(c.Store)),
+		SLA: c.SLA, Macros: c.Macros, HoldReasons: c.HoldReasons, RequestTypes: c.RequestTypes, Organisations: c.Organisations, Reports: c.Reports, AuditLog: auditlog.NewService(mongostore.NewAuditLogRepository(c.Store)),
 		Automation: c.Automation, Live: c.Live, LiveHeartbeat: c.LiveHeartbeat,
 		SecureCookies: c.Boot.Env != EnvDevelopment,
 		BaseURL: func() string {

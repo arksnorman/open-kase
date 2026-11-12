@@ -83,6 +83,10 @@ const (
 	HoldReasonCreated              Action = "holdReason.created"
 	HoldReasonUpdated              Action = "holdReason.updated"
 	HoldReasonDeleted              Action = "holdReason.deleted"
+	RequestTypeCreated             Action = "requestType.created"
+	RequestTypeUpdated             Action = "requestType.updated"
+	RequestTypeDeleted             Action = "requestType.deleted"
+	RequestTypeReordered           Action = "requestType.reordered"
 	OrganisationCreated            Action = "organisation.created"
 	OrganisationUpdated            Action = "organisation.updated"
 	OrganisationDeleted            Action = "organisation.deleted"
@@ -181,6 +185,10 @@ var actions = []ActionInfo{
 	{Code: HoldReasonCreated, Label: "Created a hold reason", Category: CategoryConfiguration},
 	{Code: HoldReasonUpdated, Label: "Updated a hold reason", Category: CategoryConfiguration},
 	{Code: HoldReasonDeleted, Label: "Deleted a hold reason", Category: CategoryConfiguration},
+	{Code: RequestTypeCreated, Label: "Created a request type", Category: CategoryConfiguration},
+	{Code: RequestTypeUpdated, Label: "Updated a request type", Category: CategoryConfiguration},
+	{Code: RequestTypeDeleted, Label: "Deleted a request type", Category: CategoryConfiguration},
+	{Code: RequestTypeReordered, Label: "Reordered the request types", Category: CategoryConfiguration},
 	{Code: OrganisationCreated, Label: "Created an organisation", Category: CategoryContacts},
 	{Code: OrganisationUpdated, Label: "Updated an organisation", Category: CategoryContacts},
 	{Code: OrganisationDeleted, Label: "Deleted an organisation", Category: CategoryContacts},

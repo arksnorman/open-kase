@@ -17,6 +17,7 @@ import (
 	"github.com/arksnorman/open-kase/api/internal/idempotency"
 	"github.com/arksnorman/open-kase/api/internal/jobs"
 	"github.com/arksnorman/open-kase/api/internal/outbox"
+	"github.com/arksnorman/open-kase/api/internal/requesttypes"
 	"github.com/arksnorman/open-kase/api/internal/sla"
 	"github.com/arksnorman/open-kase/api/internal/statuses"
 	"github.com/arksnorman/open-kase/api/package/clock"
@@ -42,14 +43,21 @@ type Requesters interface {
 	EnsureRequester(ctx context.Context, scope *access.ProjectScope, name, email string, externalID, organisationID *string) (customers.Contact, error)
 }
 
+// RequestTypes lists a project's request types, active and inactive, by order.
+type RequestTypes interface {
+	Types(ctx context.Context, workspaceID, projectID string) ([]requesttypes.Type, error)
+}
+
 // Deps are the service's collaborators.
 type Deps struct {
-	Repo       Repository
-	Files      FileStore
-	Catalog    statuses.CatalogRepository
-	Requesters Requesters
-	Clock      clock.Clock
-	Limits     func() Limits
+	Repo    Repository
+	Files   FileStore
+	Catalog statuses.CatalogRepository
+	// RequestTypes resolves and defaults a ticket's request type.
+	RequestTypes RequestTypes
+	Requesters   Requesters
+	Clock        clock.Clock
+	Limits       func() Limits
 	// SLA is optional (nil: SLA off).
 	SLA SLAPolicies
 	// Jobs, Wake and Authors enable scheduled messages (nil Jobs: 503
@@ -66,6 +74,7 @@ type Service struct {
 	repo       Repository
 	files      FileStore
 	catalog    statuses.CatalogRepository
+	types      RequestTypes
 	requesters Requesters
 	clock      clock.Clock
 	limits     func() Limits
@@ -78,7 +87,7 @@ type Service struct {
 
 // NewService returns a tickets service.
 func NewService(d Deps) *Service {
-	return &Service{repo: d.Repo, files: d.Files, catalog: d.Catalog, requesters: d.Requesters, clock: d.Clock, limits: d.Limits,
+	return &Service{repo: d.Repo, files: d.Files, catalog: d.Catalog, types: d.RequestTypes, requesters: d.Requesters, clock: d.Clock, limits: d.Limits,
 		sla: d.SLA, jobs: d.Jobs, wakeJobs: d.Wake, authors: d.Authors, signatures: d.Signatures}
 }
 
@@ -473,7 +482,7 @@ func (s *Service) create(ctx context.Context, scope *access.ProjectScope, in Cre
 		CCEmails: cc, Organisation: org,
 		Requester: ContactRef{Id: contact.Id, Name: contact.Name, Email: contact.Email, ExternalId: contact.ExternalId},
 		Group:     group, Priority: DefaultPriority, Status: Ref{Id: set.Open.Id, Name: set.Open.Name},
-		StatusCategory: statuses.CategoryOpen, RequestType: Ref{Id: rt.Id, Name: rt.Name},
+		StatusCategory: statuses.CategoryOpen, RequestType: RequestTypeRef{Id: rt.Id, Code: rt.Code, Name: rt.Name},
 		CreatedAt: now, UpdatedAt: now, PublicUpdatedAt: now, PublicActivityAt: now, StaffActivityAt: now, Version: 1,
 	}
 	msg := Message{ProjectId: scope.Project.Id, Visibility: VisibilityPublic, Body: in.Body, CreatedAt: now}
@@ -624,20 +633,49 @@ func (s *Service) checkOrganisation(ctx context.Context, scope *access.ProjectSc
 	return err
 }
 
-func (s *Service) requestType(ctx context.Context, scope *access.ProjectScope, id *string) (statuses.RequestType, error) {
-	all, err := s.catalog.ProjectRequestTypes(ctx, scope.Principal.WorkspaceId, scope.Project.Id)
+// requestType resolves the request type of a new ticket or of a change: the
+// first active type when id is nil, otherwise the type with that ID, which
+// must exist and be active.
+func (s *Service) requestType(ctx context.Context, scope *access.ProjectScope, id *string) (requesttypes.Type, error) {
+	all, err := s.types.Types(ctx, scope.Principal.WorkspaceId, scope.Project.Id)
 	if err != nil {
-		return statuses.RequestType{}, err
+		return requesttypes.Type{}, err
 	}
 	for _, rt := range all {
-		if (id != nil && rt.Id == *id) || (id == nil && rt.Code == "issue") {
+		switch {
+		case id == nil && rt.Active:
+			return rt, nil
+		case id != nil && rt.Id == *id && !rt.Active:
+			return requesttypes.Type{}, errRequestTypeInactive()
+		case id != nil && rt.Id == *id:
 			return rt, nil
 		}
 	}
-	if id == nil && len(all) > 0 {
-		return all[0], nil
+	return requesttypes.Type{}, errRequestTypeNotFound()
+}
+
+func errRequestTypeNotFound() error {
+	return fault.Field("requestTypeId", "notFound", "No request type with this ID exists in the project.")
+}
+
+func errRequestTypeInactive() error {
+	return fault.Field("requestTypeId", "inactive", "The request type is inactive.")
+}
+
+// copiedRequestType returns the ID of the original ticket's request type when
+// it is still active, and nil (the default type) when it was deactivated or
+// deleted since.
+func (s *Service) copiedRequestType(ctx context.Context, scope *access.ProjectScope, id string) (*string, error) {
+	all, err := s.types.Types(ctx, scope.Principal.WorkspaceId, scope.Project.Id)
+	if err != nil {
+		return nil, err
 	}
-	return statuses.RequestType{}, fault.Field("requestTypeId", "notFound", "No request type with this ID exists in the project.")
+	for _, rt := range all {
+		if rt.Id == id && rt.Active {
+			return &id, nil
+		}
+	}
+	return nil, nil
 }
 
 // ---- Queries ----
@@ -1000,6 +1038,10 @@ func (s *Service) mutate(ctx context.Context, scope *access.ProjectScope, m Muta
 		return Ticket{}, fault.Field("holdReasonId", "notFound", "No hold reason with this ID exists in the project.")
 	case errors.Is(err, ErrOrganisationInactive):
 		return Ticket{}, fault.Field("organisationId", "organisationInactive", "This organisation is inactive and cannot be linked to new tickets.")
+	case errors.Is(err, ErrRequestTypeInactive):
+		return Ticket{}, errRequestTypeInactive()
+	case errors.Is(err, ErrRequestTypeGone):
+		return Ticket{}, errRequestTypeNotFound()
 	case errors.Is(err, ErrOrganisationGone):
 		return Ticket{}, fault.Field("organisationId", "notFound", "No organisation with this ID exists in the project.")
 	}

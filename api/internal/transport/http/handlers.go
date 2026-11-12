@@ -629,12 +629,3 @@ func (a *api) listStatuses(c *gin.Context) {
 	rows, err := a.Workflow.Statuses(c.Request.Context(), s)
 	respond(c, http.StatusOK, items(rows, toStatus), err)
 }
-
-func (a *api) listRequestTypes(c *gin.Context) {
-	s, ok := a.scope(c)
-	if !ok {
-		return
-	}
-	rows, err := a.Workflow.RequestTypes(c.Request.Context(), s)
-	respond(c, http.StatusOK, items(rows, toRequestType), err)
-}

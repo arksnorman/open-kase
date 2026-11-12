@@ -281,15 +281,6 @@ func toStatus(s statuses.Status) statusDTO {
 	return statusDTO{Id: s.Id, Name: s.Name, Category: string(s.Category), Builtin: s.Builtin}
 }
 
-type requestTypeDTO struct {
-	Id   string `json:"id"`
-	Name string `json:"name"`
-}
-
-func toRequestType(t statuses.RequestType) requestTypeDTO {
-	return requestTypeDTO{Id: t.Id, Name: t.Name}
-}
-
 // Settings (administrator view; secrets redacted).
 
 type settingsProductDTO struct {

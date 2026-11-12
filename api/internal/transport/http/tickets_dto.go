@@ -34,7 +34,7 @@ type ticketDTO struct {
 	Priority            int                 `json:"priority" minimum:"1" maximum:"4" doc:"1 critical, 2 high, 3 normal, 4 low."`
 	RequestedPriority   *int                `json:"requestedPriority"`
 	Status              statusRefDTO        `json:"status"`
-	RequestType         refDTO              `json:"requestType"`
+	RequestType         requestTypeRefDTO   `json:"requestType"`
 	Watching            bool                `json:"watching"`
 	WatcherCount        int                 `json:"watcherCount"`
 	LastPublicMessageId *string             `json:"lastPublicMessageId"`
@@ -71,7 +71,7 @@ func toTicket(t tickets.Ticket) ticketDTO {
 		Group:     refDTO{Id: t.Group.Id, Name: t.Group.Name}, Source: t.Source,
 		Assignee: toRef(t.Assignee), Priority: t.Priority,
 		Status:      statusRefDTO{Id: t.Status.Id, Name: t.Status.Name, Category: string(t.StatusCategory)},
-		RequestType: refDTO{Id: t.RequestType.Id, Name: t.RequestType.Name}, Watching: t.Watching, WatcherCount: t.WatcherCount,
+		RequestType: requestTypeRefDTO{Id: t.RequestType.Id, Code: t.RequestType.Code, Name: t.RequestType.Name}, Watching: t.Watching, WatcherCount: t.WatcherCount,
 		LastPublicMessageId: nullable(t.LastPublicId), CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt, ActivityAt: t.StaffActivityAt,
 		ResolvedAt: t.ResolvedAt, ArchivedAt: t.ArchivedAt, Version: t.Version,
 	}

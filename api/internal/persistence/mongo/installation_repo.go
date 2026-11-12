@@ -103,8 +103,17 @@ func (r *InstallationRepository) Seed(ctx context.Context, seed installation.See
 			res.StatusesCreated += int(up.UpsertedCount)
 		}
 
-		// Default request types.
+		// Default request types, only while the workspace has none: an admin
+		// who deleted or renamed a seeded type does not get it back (or a
+		// duplicate name) when init runs again.
+		haveTypes, err := r.store.col(colRequestTypes).CountDocuments(ctx, bson.D{{Key: "workspaceId", Value: ws.Id}}, options.Count().SetLimit(1))
+		if err != nil {
+			return err
+		}
 		for _, t := range seed.RequestTypes {
+			if haveTypes > 0 {
+				break
+			}
 			up, err := r.store.col(colRequestTypes).UpdateOne(ctx,
 				bson.D{{Key: "workspaceId", Value: ws.Id}, {Key: "projectId", Value: nil}, {Key: "code", Value: t.Code}},
 				bson.D{{Key: "$setOnInsert", Value: bson.D{

@@ -198,7 +198,32 @@ func operations() []op {
 		{Method: "GET", Path: "/api/v1/statuses", Id: "listStatuses", Tag: "Project", Summary: "Ticket statuses", Auth: authUserOrToken,
 			Permission: permMember + " Integrations: any scope.", Response: statusDTO{}, List: true},
 		{Method: "GET", Path: "/api/v1/request-types", Id: "listRequestTypes", Tag: "Project", Summary: "Request types", Auth: authUserOrToken,
-			Permission: permMember + " Integrations: any scope.", Response: requestTypeDTO{}, List: true},
+			Permission: permMember + " Integrations: any scope.", Response: requestTypeDTO{}, List: true,
+			Query:  []param{qe("active", "`true` (default; what pickers use), `false` or `all`.", validation.RequestTypeActiveFilter)},
+			Errors: []errSpec{{422, []string{"validationFailed"}}},
+			Description: "By `order`. Integrations map their categories by `code`, which never changes, and send the `id` as `requestTypeId`. " +
+				"`inUse` (tickets carrying the type) is reported to admins; 0 for everyone else."},
+		{Method: "POST", Path: "/api/v1/request-types", Id: "createRequestType", Tag: "Project", Summary: "Create a request type", Auth: authUser,
+			Permission: permAdmin + " API tokens: never.", Request: createRequestTypeBody{}, Response: requestTypeDTO{}, Status: 201, Idempotent: true,
+			Errors: []errSpec{errForbidden, {409, []string{"requestTypeExists", "requestTypeCodeExists", "requestTypeLimitReached"}}, {422, []string{"validationFailed"}}},
+			Description: "The new type is active and goes last. Without `code` it is derived from the name (`Service request` becomes `serviceRequest`; `API access` becomes `apiAccess`), " +
+				"with a number appended when that code is taken; a name that gives no valid code (another script, one letter) needs an explicit `code`. A project has at most 50 types. Audited.",
+			Example: map[string]any{"name": "Billing", "code": "billing"}},
+		{Method: "PATCH", Path: "/api/v1/request-types/:t", Id: "patchRequestType", Tag: "Project", Summary: "Rename, deactivate or reactivate a request type", Auth: authUser,
+			Permission: permAdmin + " API tokens: never.", Request: patchRequestTypeBody{}, Response: requestTypeDTO{}, IfMatch: ifMatchRequired,
+			Errors: []errSpec{errForbidden, {404, []string{"requestTypeNotFound"}}, {409, []string{"requestTypeExists", "requestTypeLastActive"}}, {422, []string{"validationFailed"}}},
+			Description: "The `code` never changes (it is rejected as an unknown field). Names are unique ignoring case, also among inactive types. " +
+				"Deactivating hides the type from pickers and refuses it on new and changed tickets; tickets that carry it keep it. A request that changes nothing returns the type unchanged, without an audit event.",
+			Example: map[string]any{"name": "Billing and refunds"}},
+		{Method: "PUT", Path: "/api/v1/request-types/order", Id: "reorderRequestTypes", Tag: "Project", Summary: "Reorder the request types", Auth: authUser,
+			Permission: permAdmin + " API tokens: never.", Request: reorderRequestTypesBody{}, Response: requestTypeDTO{}, List: true,
+			Errors: []errSpec{errForbidden, {409, []string{"requestTypeOrderConflict"}}, {422, []string{"validationFailed"}}},
+			Description: "`ids` must name every request type of the project, active and inactive, exactly once; otherwise `409 requestTypeOrderConflict` (reload and try again). " +
+				"Returns every type in the new order. Audited."},
+		{Method: "DELETE", Path: "/api/v1/request-types/:t", Id: "deleteRequestType", Tag: "Project", Summary: "Delete a request type", Auth: authUser,
+			Permission: permAdmin + " API tokens: never.", IfMatch: ifMatchRequired,
+			Errors:      []errSpec{errForbidden, {404, []string{"requestTypeNotFound"}}, {409, []string{"requestTypeInUse", "requestTypeLastActive"}}},
+			Description: "Refused with `409 requestTypeInUse` while any ticket carries the type (tickets are never deleted: deactivate it instead), and with `409 requestTypeLastActive` for the only active type. Audited."},
 
 		// ---- Groups ----
 		{Method: "GET", Path: "/api/v1/groups", Id: "listGroups", Tag: "Groups", Summary: "List groups", Auth: authUserOrToken,

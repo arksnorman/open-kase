@@ -176,7 +176,7 @@ type ticketsCreateIn struct {
 	Body           string      `json:"body" jsonschema:"First public message (Markdown; visible to the requester)."`
 	Requester      requesterIn `json:"requester" jsonschema:"The requester contact."`
 	Priority       int         `json:"priority,omitempty" jsonschema:"1 (critical) to 4 (low). From a requester-side token it is stored as the requested priority."`
-	RequestTypeId  string      `json:"requestTypeId,omitempty" jsonschema:"Request type ID (default: issue)."`
+	RequestTypeId  string      `json:"requestTypeId,omitempty" jsonschema:"Request type ID of an active type (default: the first active request type)."`
 	GroupId        string      `json:"groupId,omitempty" jsonschema:"Initial group ID (default: the project's triage group)."`
 	OrganisationId string      `json:"organisationId,omitempty" jsonschema:"Optional: the organisation this ticket belongs to (organisationsCreate / organisationsList). Set explicitly; it is not taken from the requester."`
 	CCEmails       []string    `json:"ccEmails,omitempty" jsonschema:"Optional: up to 10 email addresses copied on every email to the requester (not the requester's own address)."`
@@ -190,7 +190,7 @@ type ticketsFollowUpIn struct {
 	Priority       int      `json:"priority,omitempty" jsonschema:"1 (critical) to 4 (low)."`
 	AddSignature   *bool    `json:"addSignature,omitempty" jsonschema:"Signed-in users only (default true): false skips the signatures on the first message."`
 	GroupId        string   `json:"groupId,omitempty" jsonschema:"Defaults to the original's group."`
-	RequestTypeId  string   `json:"requestTypeId,omitempty" jsonschema:"Defaults to the original's request type."`
+	RequestTypeId  string   `json:"requestTypeId,omitempty" jsonschema:"Defaults to the original's request type, or to the first active type when that one is inactive."`
 	Tags           []string `json:"tags,omitempty" jsonschema:"Catalog tags for the follow-up (none by default)."`
 	ContactId      string   `json:"contactId,omitempty" jsonschema:"Only when the first message is written as the requester (a token with neither tickets:comment nor tickets:all): open the follow-up as this contact of the original's organisation (422 contactNotInOrganisation otherwise): they become the requester of the new ticket and author its first message. Otherwise 422 notAllowed."`
 	IdempotencyKey string   `json:"idempotencyKey,omitempty" jsonschema:"Optional key (1-200 printable ASCII); a retry with the same key and arguments returns the first ticket."`
@@ -201,7 +201,7 @@ type ticketsCopyIn struct {
 	Subject            string    `json:"subject,omitempty" jsonschema:"Defaults to the original's subject."`
 	GroupId            string    `json:"groupId,omitempty" jsonschema:"Defaults to the original's group."`
 	Priority           int       `json:"priority,omitempty" jsonschema:"1 (critical) to 4 (low); defaults to the original's."`
-	RequestTypeId      string    `json:"requestTypeId,omitempty" jsonschema:"Defaults to the original's request type."`
+	RequestTypeId      string    `json:"requestTypeId,omitempty" jsonschema:"Defaults to the original's request type, or to the first active type when that one is inactive."`
 	Tags               *[]string `json:"tags,omitempty" jsonschema:"Catalog tags; defaults to the original's tags that still exist."`
 	Body               string    `json:"body,omitempty" jsonschema:"First public message (Markdown); defaults to the original's first public message."`
 	IncludeAttachments *bool     `json:"includeAttachments,omitempty" jsonschema:"Copy the first message's attachments (default true)."`
@@ -237,7 +237,7 @@ type ticketsUpdateIn struct {
 	ticketRef
 	Priority       int       `json:"priority,omitempty" jsonschema:"1 (critical), 2 (high), 3 (normal) or 4 (low)."`
 	Tags           *[]string `json:"tags,omitempty" jsonschema:"Replaces the ticket's tag set (an empty list removes every tag). Added tags must exist in the catalog (tagsList); unknown ones are rejected with unknownTag."`
-	RequestTypeId  string    `json:"requestTypeId,omitempty" jsonschema:"Request type ID."`
+	RequestTypeId  string    `json:"requestTypeId,omitempty" jsonschema:"Request type ID of an active type; an inactive type is refused."`
 	Subject        string    `json:"subject,omitempty" jsonschema:"New subject: only a requester-side token, on a ticket it created; staff receive subjectLocked."`
 	OrganisationId *string   `json:"organisationId,omitempty" jsonschema:"Staff only: the ticket's organisation ID (an empty string clears it). Allowed for tokens on any ticket; signed-in users cannot change it on API-created tickets."`
 	CCEmails       *[]string `json:"ccEmails,omitempty" jsonschema:"Staff only: replaces the CC addresses copied on requester emails (up to 10; an empty list clears them)."`

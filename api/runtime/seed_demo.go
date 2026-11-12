@@ -397,7 +397,7 @@ func (s *seeder) seedProject(ctx context.Context, sp seedProject, adminID string
 	requester := access.Principal{Kind: access.KindIntegration, Id: gateway.Id, WorkspaceId: s.ws, Name: gateway.Name,
 		ProjectId: scope.Project.Id, Scopes: gateway.Scopes, Actor: &op}
 
-	rts, err := s.c.Workflow.RequestTypes(ctx, scope)
+	rts, err := s.c.RequestTypes.List(ctx, scope, "true")
 	if err != nil {
 		return err
 	}

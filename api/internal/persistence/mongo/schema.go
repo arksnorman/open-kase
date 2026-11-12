@@ -605,6 +605,8 @@ func schemaSpecs() []collectionSpec {
 				"active":      tBool,
 				"order":       tInt,
 				"createdAt":   tDate,
+				"version":     tPositiveInt,
+				"lastUsedAt":  tOptDate,
 			}),
 			indexes: []mongo.IndexModel{
 				idx(bson.D{{Key: "workspaceId", Value: 1}, {Key: "projectId", Value: 1}, {Key: "code", Value: 1}}, "workspaceProjectCodeUnique", true),
@@ -870,6 +872,7 @@ func schemaSpecs() []collectionSpec {
 			indexes: []mongo.IndexModel{
 				idx(bson.D{{Key: "projectId", Value: 1}, {Key: "number", Value: 1}}, "projectNumberUnique", true),
 				idx(bson.D{{Key: "projectId", Value: 1}, {Key: "holdReasonId", Value: 1}}, "projectHoldReason", false),
+				idx(bson.D{{Key: "projectId", Value: 1}, {Key: "requestTypeId", Value: 1}}, "projectRequestType", false),
 				idx(bson.D{{Key: "projectId", Value: 1}, {Key: "organisationId", Value: 1}}, "projectOrganisation", false),
 				idx(bson.D{{Key: "projectId", Value: 1}, {Key: "requesterId", Value: 1}, {Key: "publicUpdatedAt", Value: -1}, {Key: "_id", Value: -1}}, "projectRequester", false),
 				idx(bson.D{{Key: "projectId", Value: 1}, {Key: "createdAt", Value: 1}}, "projectCreated", false),
