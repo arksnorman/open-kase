@@ -87,6 +87,12 @@ const saveStatus = async (id: string | null | undefined) => {
 const savePriority = async (p: Priority | '' | null | undefined) => {
   if (p && p !== props.ticket.priority) await props.onPriority?.(p)
 }
+// The editor offers active types; a ticket's own inactive type is listed too (marked) so the select is not blank.
+const requestTypeChoices = computed<SelectOption<string>[]>(() =>
+  props.requestTypes.some((o) => o.value === props.ticket.requestType.id)
+    ? props.requestTypes
+    : [{ value: props.ticket.requestType.id, label: `${props.ticket.requestType.name} (inactive)` }, ...props.requestTypes],
+)
 const saveRequestType = async (id: string | null | undefined) => {
   if (id && id !== props.ticket.requestType.id) await props.onRequestType?.(id)
 }
@@ -262,7 +268,7 @@ async function assignSelf() {
               <SelectInput
                 :ref="editorRef"
                 :model-value="draft"
-                :options="requestTypes"
+                :options="requestTypeChoices"
                 size="sm"
                 aria-label="Request type"
                 :aria-describedby="errorId"

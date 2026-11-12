@@ -3,7 +3,7 @@
 // filter with the view and the caller's own ticket access. A queue hides the filters it fixes itself.
 // Group and assignee options are searched on the server, never loaded as a whole.
 import { computed } from 'vue'
-import { adminApi, organisationsApi, tagsApi, ticketsApi } from '@/api/endpoints'
+import { adminApi, organisationsApi, requestTypesApi, tagsApi, ticketsApi } from '@/api/endpoints'
 import type { Member, Priority } from '@/api/types'
 import { BaseButton, FilterChip, PriorityBadge, StatusBadge, type SelectOption } from '@/components/base'
 import { useQuery } from '@/composables/useQuery'
@@ -23,8 +23,8 @@ const statusesQ = useQuery(
   (signal) => ticketsApi.statuses({ signal }),
 )
 const typesQ = useQuery(
-  () => `request-types`,
-  (signal) => ticketsApi.requestTypes({ signal }),
+  () => `request-types:all`,
+  (signal) => requestTypesApi.list('all', { signal }),
 )
 const tagsQ = useQuery(
   () => `tags`,
@@ -115,7 +115,11 @@ const organisationOptions = computed(() => {
 })
 
 const types = computed({ get: () => props.filters.requestTypeIds, set: (v: string[]) => set({ requestTypeIds: v }) })
-const typeOptions = computed(() => (typesQ.data.value?.items ?? []).map((t) => ({ value: t.id, label: t.name })))
+// Inactive types stay listed (after the active ones) so tickets that still carry one can be found.
+const typeOptions = computed(() => {
+  const items = typesQ.data.value?.items ?? []
+  return [...items.filter((t) => t.active), ...items.filter((t) => !t.active)].map((t) => ({ value: t.id, label: t.active ? t.name : `${t.name} (inactive)` }))
+})
 
 const due = computed({
   get: () => (props.filters.due ? [props.filters.due] : []),

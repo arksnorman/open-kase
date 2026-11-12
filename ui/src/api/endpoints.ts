@@ -60,6 +60,7 @@ import type {
   QueueCounts,
   QueueView,
   RequestType,
+  RequestTypeInput,
   Settings,
   ThemeChoice,
   Ticket,
@@ -397,6 +398,19 @@ export const holdReasonsApi = {
   update: (reason: HoldReason, input: HoldReasonInput) => api.patch<HoldReason>(hr(reason.id), input, { ifMatch: reason.version }),
   /** Refused with `holdReasonInUse` while a ticket is on hold with the reason. */
   remove: (reason: HoldReason) => api.delete<void>(hr(reason.id), undefined, { ifMatch: reason.version }),
+}
+
+const rtp = (id: string) => `/request-types/${seg(id)}`
+export const requestTypesApi = {
+  /** Every type of the project in order; `all` includes the inactive ones (`inUse` is filled for admins). */
+  list: (active: 'true' | 'false' | 'all' = 'all', o: Sig = {}) =>
+    api.get<ItemsResponse<RequestType>>(`/request-types`, { ...o, query: { active } }),
+  create: (input: RequestTypeInput) => api.post<RequestType>(`/request-types`, input, { idempotencyKey: true }),
+  update: (type: RequestType, input: RequestTypeInput) => api.patch<RequestType>(rtp(type.id), input, { ifMatch: type.version }),
+  /** `ids` names every type (active and inactive) once, in the wanted order. */
+  reorder: (ids: string[]) => api.put<ItemsResponse<RequestType>>(`/request-types/order`, { ids }),
+  /** Refused with `requestTypeInUse` while a ticket carries the type. */
+  remove: (type: RequestType) => api.delete<void>(rtp(type.id), undefined, { ifMatch: type.version }),
 }
 
 const og = (id: string) => `/organisations/${seg(id)}`

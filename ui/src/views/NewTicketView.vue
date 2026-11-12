@@ -45,6 +45,11 @@ const requestTypesQ = useQuery(
   (signal) => ticketsApi.requestTypes({ signal }),
 )
 const requestTypeOptions = computed(() => (requestTypesQ.data.value?.items ?? []).map((r) => ({ value: r.id, label: r.name })))
+// The server picks the first active type in the admin's order when none is chosen.
+const defaultTypeLabel = computed(() => {
+  const first = requestTypesQ.data.value?.items[0]
+  return first ? `Default (${first.name})` : 'Default'
+})
 const staged = createStagedAttachments()
 const attachNotice = ref<string | null>(null)
 const uploading = computed(() => staged.files.some((f) => f.state === 'uploading'))
@@ -139,7 +144,7 @@ async function submit() {
             <PrioritySelect v-model="priority" />
           </FormField>
           <FormField label="Request type" :error="fe('requestTypeId')">
-            <SelectInput v-model="requestTypeId" :options="requestTypeOptions" placeholder="Default (Issue)" clearable searchable />
+            <SelectInput v-model="requestTypeId" :options="requestTypeOptions" :placeholder="defaultTypeLabel" clearable searchable />
           </FormField>
           <FormField label="Group" :error="fe('groupId')">
             <SelectInput v-model="groupId" :options="groupOptions" placeholder="Default (Triage)" clearable searchable />

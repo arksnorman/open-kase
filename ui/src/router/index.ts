@@ -54,6 +54,7 @@ const router = createRouter({
         { path: 'canned-replies', name: 'admin-macros', component: () => import('@/views/admin/MacrosAdmin.vue'), meta: { title: 'Canned replies' } },
         { path: 'tags', name: 'admin-tags', component: () => import('@/views/admin/TagsAdmin.vue'), meta: { title: 'Tags' } },
         { path: 'hold-reasons', name: 'admin-hold-reasons', component: () => import('@/views/admin/HoldReasonsAdmin.vue'), meta: { title: 'Hold reasons' } },
+        { path: 'request-types', name: 'admin-request-types', component: () => import('@/views/admin/RequestTypesAdmin.vue'), meta: { title: 'Request types' } },
         { path: 'organisations', name: 'admin-organisations', component: () => import('@/views/admin/OrganisationsAdmin.vue'), meta: { title: 'Organisations' } },
         { path: 'integrations', name: 'admin-integrations', component: () => import('@/views/admin/IntegrationsAdmin.vue'), meta: { title: 'Integrations' } },
         { path: 'webhooks', name: 'admin-webhooks', component: () => import('@/views/admin/WebhooksAdmin.vue'), meta: { title: 'Webhooks' } },

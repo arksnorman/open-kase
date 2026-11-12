@@ -433,6 +433,12 @@ export interface WorkflowStatus {
 }
 
 export type RequestType = S['RequestType']
+/** Create takes name and optional code; update takes name and/or active (the code never changes). */
+export interface RequestTypeInput {
+  name?: string
+  code?: string
+  active?: boolean
+}
 
 export type RequesterInput = { name: string; email: string; externalId?: string } | { contactId: string }
 

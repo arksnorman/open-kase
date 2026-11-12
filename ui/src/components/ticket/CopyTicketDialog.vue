@@ -100,6 +100,8 @@ async function loadAll() {
 }
 
 const requestTypeOptions = computed(() => requestTypes.value)
+// Empty when the original's type is inactive: the server then uses the first active type, as for a new ticket.
+const requestTypePlaceholder = computed(() => (requestTypes.value[0] ? `Default (${requestTypes.value[0].label})` : 'Default'))
 const tagOptions = computed(() => catalogTags.value)
 const groupOptions = computed<SelectOption<string>[]>(() => groups.value.map((g) => ({ value: g.id, label: g.name })))
 
@@ -211,7 +213,7 @@ async function submit() {
           <PrioritySelect v-model="priority" />
         </FormField>
         <FormField label="Request type" :error="fe('requestTypeId')">
-          <SelectInput v-model="requestTypeId" :options="requestTypeOptions" searchable placeholder="Same as the original" />
+          <SelectInput v-model="requestTypeId" :options="requestTypeOptions" searchable :placeholder="requestTypePlaceholder" />
         </FormField>
         <FormField label="Tags" optional :error="fe('tags')">
           <SelectInput v-model="tags" :options="tagOptions" multiple placeholder="No tags" />

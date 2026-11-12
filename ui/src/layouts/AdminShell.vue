@@ -2,6 +2,7 @@
 import {
   IconArrowLeft,
   IconBuildingSkyscraper,
+  IconCategory,
   IconChartBar,
   IconClockHour4,
   IconListDetails,
@@ -28,6 +29,7 @@ const items = [
   { name: 'admin-macros', label: 'Canned replies', icon: IconMessageBolt },
   { name: 'admin-tags', label: 'Tags', icon: IconTags },
   { name: 'admin-hold-reasons', label: 'Hold reasons', icon: IconPlayerPause },
+  { name: 'admin-request-types', label: 'Request types', icon: IconCategory },
   { name: 'admin-organisations', label: 'Organisations', icon: IconBuildingSkyscraper },
   { name: 'admin-integrations', label: 'Integrations', icon: IconPlug },
   { name: 'admin-webhooks', label: 'Webhooks', icon: IconWebhook },
