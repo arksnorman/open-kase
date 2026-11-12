@@ -578,6 +578,15 @@ func (s *Service) create(ctx context.Context, scope *access.ProjectScope, in Cre
 		return Ticket{}, errAttachmentsGone()
 	case errors.Is(err, ErrGroupUnavailable):
 		return Ticket{}, errGroupInactive()
+	case errors.Is(err, ErrRequestTypeInactive):
+		// Deactivated or deleted between the check above and the commit.
+		return Ticket{}, errRequestTypeInactive()
+	case errors.Is(err, ErrRequestTypeGone):
+		return Ticket{}, errRequestTypeNotFound()
+	case errors.Is(err, ErrOrganisationInactive):
+		return Ticket{}, errOrganisationInactive()
+	case errors.Is(err, ErrOrganisationGone):
+		return Ticket{}, errOrganisationNotFound()
 	case errors.Is(err, ErrNotFound):
 		return Ticket{}, errTicketNotFound()
 	case errors.Is(err, ErrTooManyLinks):
@@ -587,6 +596,14 @@ func (s *Service) create(ctx context.Context, scope *access.ProjectScope, in Cre
 		return Ticket{}, err
 	}
 	return s.present(scope, out), nil
+}
+
+func errOrganisationInactive() error {
+	return fault.Field("organisationId", "organisationInactive", "This organisation is inactive and cannot be linked to new tickets.")
+}
+
+func errOrganisationNotFound() error {
+	return fault.Field("organisationId", "notFound", "No organisation with this ID exists in the project.")
 }
 
 func errGroupInactive() error {
@@ -1037,13 +1054,13 @@ func (s *Service) mutate(ctx context.Context, scope *access.ProjectScope, m Muta
 	case errors.Is(err, ErrHoldReasonGone):
 		return Ticket{}, fault.Field("holdReasonId", "notFound", "No hold reason with this ID exists in the project.")
 	case errors.Is(err, ErrOrganisationInactive):
-		return Ticket{}, fault.Field("organisationId", "organisationInactive", "This organisation is inactive and cannot be linked to new tickets.")
+		return Ticket{}, errOrganisationInactive()
 	case errors.Is(err, ErrRequestTypeInactive):
 		return Ticket{}, errRequestTypeInactive()
 	case errors.Is(err, ErrRequestTypeGone):
 		return Ticket{}, errRequestTypeNotFound()
 	case errors.Is(err, ErrOrganisationGone):
-		return Ticket{}, fault.Field("organisationId", "notFound", "No organisation with this ID exists in the project.")
+		return Ticket{}, errOrganisationNotFound()
 	}
 	return Ticket{}, err
 }

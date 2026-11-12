@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -800,6 +801,70 @@ func TestDeriveRequestTypeCode(t *testing.T) {
 	} {
 		if got := requesttypes.DeriveCode(name); got != want {
 			t.Errorf("%q: %q, want %q", name, got, want)
+		}
+	}
+}
+
+// A ticket write and a concurrent delete or deactivation of its request type
+// never leave a ticket on a deleted type, and never answer 500.
+func TestRequestTypesRaceWithTicketCreate(t *testing.T) {
+	f := newTicketFixture(t)
+	const writers = 4
+	for round := range 6 {
+		rt := f.rtCreate(fmt.Sprintf("Race %d", round), "").expect(201).JSON()
+		id := rt["id"].(string)
+		deleting := round%2 == 0
+		creates := make([]result, writers)
+		var change result
+		var wg sync.WaitGroup
+		start := make(chan struct{})
+		for i := range writers {
+			wg.Go(func() {
+				<-start
+				creates[i] = f.do("POST", "/api/v1/tickets", map[string]any{"subject": "Race", "body": "Body.", "requestTypeId": id,
+					"requester": map[string]any{"name": "Racer", "email": fmt.Sprintf("racer%d-%d@acme.example", round, i)}}, bearer(f.dana.Access))
+			})
+		}
+		wg.Go(func() {
+			<-start
+			if deleting {
+				change = f.do("DELETE", "/api/v1/request-types/"+id, nil, bearer(f.admin.Access), ifMatchV(1))
+			} else {
+				change = f.do("PATCH", "/api/v1/request-types/"+id, map[string]any{"active": false}, bearer(f.admin.Access), ifMatchV(1))
+			}
+		})
+		close(start)
+		wg.Wait()
+
+		created := 0
+		for _, r := range creates {
+			switch {
+			case r.Code == 201:
+				created++
+			case r.Code == 422 && strings.Contains(string(r.Body), `"requestTypeId"`):
+			default:
+				t.Fatalf("round %d: create answered %d %s", round, r.Code, r.Body)
+			}
+		}
+		stored, err := f.coll("tickets").CountDocuments(context.Background(), bson.D{{Key: "requestTypeId", Value: mustObjectID(t, id)}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if int(stored) != created {
+			t.Fatalf("round %d: %d tickets stored, %d created", round, stored, created)
+		}
+		switch {
+		case deleting && change.Code == 204:
+			if created != 0 {
+				t.Fatalf("round %d: deleted a type that %d tickets carry", round, created)
+			}
+		case deleting && change.Code == 409 && change.Problem().Code == "requestTypeInUse":
+			if created == 0 {
+				t.Fatalf("round %d: requestTypeInUse without a ticket", round)
+			}
+		case !deleting && change.Code == 200:
+		default:
+			t.Fatalf("round %d: change answered %d %s", round, change.Code, change.Body)
 		}
 	}
 }
