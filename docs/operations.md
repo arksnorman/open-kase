@@ -52,7 +52,8 @@ Docker Compose, from the directory with `compose.yaml` (MongoDB has no published
 tools inside its container, authenticating as the root user):
 
 ```sh
-docker compose exec -T mongo sh -c 'mongodump -u root -p "$(cat /run/secrets/mongo_root_password)" --authenticationDatabase admin --db open_kase --archive --gzip' > open-kase-$(date -u +%Y%m%dT%H%M%SZ).archive.gz
+# umask 077: the archive holds the whole database, so only you may read it
+(umask 077 && docker compose exec -T mongo sh -c 'mongodump -u root -p "$(cat /run/secrets/mongo_root_password)" --authenticationDatabase admin --db open_kase --archive --gzip' > open-kase-$(date -u +%Y%m%dT%H%M%SZ).archive.gz)
 # secrets/master.key is owned by uid 65532 (the container user) with mode 0600, so root must read it:
 sudo cp secrets/master.key /safe/place/open-kase-master.key   # once, and after any change
 ```
@@ -61,7 +62,7 @@ Native, with `mongodump` from the MongoDB Database Tools (add credentials to the
 mongod requires them):
 
 ```sh
-mongodump --uri 'mongodb://127.0.0.1:27017/open_kase?replicaSet=rs0' --archive --gzip > open-kase-$(date -u +%Y%m%dT%H%M%SZ).archive.gz
+(umask 077 && mongodump --uri 'mongodb://127.0.0.1:27017/open_kase?replicaSet=rs0' --archive --gzip > open-kase-$(date -u +%Y%m%dT%H%M%SZ).archive.gz)
 sudo cp /etc/open-kase/master.key /safe/place/open-kase-master.key
 ```
 
@@ -84,14 +85,15 @@ A Docker Compose installation keeps the database files in `data/mongo`, so with 
 an archive of `data/` is a complete backup as well. It does not contain the master key:
 
 ```sh
-docker compose down
-sudo tar -czf open-kase-data-$(date -u +%Y%m%dT%H%M%SZ).tar.gz data
+docker compose stop &&
+  (umask 077 && sudo tar -czf - data > open-kase-data-$(date -u +%Y%m%dT%H%M%SZ).tar.gz)
 docker compose up -d
 ```
 
 To restore it into the same installation (the same `secrets/` and `.env`): `docker compose down`,
-move the current directory aside (`sudo mv data data.old`), unpack the archive in the installation
-directory (`sudo tar -xzpf open-kase-data-20261102T020000Z.tar.gz`) and `docker compose up -d`.
+move the current `data` directory aside (`sudo mv data data.old`), unpack the archive in the
+installation directory (`sudo tar -xzpf open-kase-data-20261102T020000Z.tar.gz`) and
+`docker compose up -d`. Delete `data.old` once the restored installation works.
 The helpdesk is down while the archive is made; `mongodump` above needs no downtime. Never copy
 `data/mongo` while the stack is running: a copy of a running MongoDB's files is not a usable backup.
 
@@ -133,24 +135,26 @@ the master key and the environment file). Prepare the new machine as for a new i
 ([`install.md`](install.md#docker-compose): Linux, Docker with Compose v2.23 or newer, a kernel
 MongoDB 8.0 accepts). Then stop the stack and copy the whole installation directory
 (`compose.yaml`, `.env`, `data/`, `secrets/`, `certs/`), as root on both machines so that owners
-and modes are kept:
+and modes are kept. The archive takes everything in that directory, so it must be a directory of
+its own, not your home directory:
 
 ```sh
 # Old machine, in the installation directory:
-docker compose down
-(umask 077 && sudo tar -czf - . > ~/open-kase-move.tar.gz)
+docker compose down &&
+  (umask 077 && sudo tar -czf - . > ~/open-kase-move.tar.gz)
 scp ~/open-kase-move.tar.gz newhost:
-# New machine (mkdir fails rather than unpack over an existing directory):
-sudo mkdir /path/to/open-kase
-sudo tar -C /path/to/open-kase -xzpf ~/open-kase-move.tar.gz
+# New machine (if the directory exists, mkdir fails and nothing is unpacked):
+sudo mkdir /path/to/open-kase &&
+  sudo tar -C /path/to/open-kase -xzpf ~/open-kase-move.tar.gz
 cd /path/to/open-kase
 sudo chown 65532:65532 secrets/master.key    # as in a new installation
+# If "ls -l .env" shows an owner other than you (your user name or uid differs on this machine):
+#   sudo chown "$USER": . .env
 docker compose up -d
 docker compose run --rm open-kase doctor
 ```
 
-If your user name differs on the new machine, run `sudo chown "$USER": . .env` so Compose can read
-`.env`. The archive holds the database and the master key: delete it on both machines once the new
+The archive holds the database and the master key: delete it on both machines once the new
 one works, and do not start the old installation again (both would send the same notifications).
 If the host name changes, update `SITE_NAME` in `.env`, the base URL (Settings → Configuration →
 General) and the certificate ([`install.md`](install.md#reverse-proxy-and-tls)).

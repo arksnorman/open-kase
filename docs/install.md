@@ -56,7 +56,8 @@ support on Docker Desktop for macOS or Windows.
 MongoDB shares the host's Linux kernel, and MongoDB 8.0 refuses to
 start on kernels 6.19 to 7.0.13 because of a kernel bug (see
 [SERVER-125742](https://jira.mongodb.org/browse/SERVER-125742)); check `uname -r` and use a kernel
-older than 6.19 or 7.0.14 and newer. Pick a directory and create the master key:
+older than 6.19 or 7.0.14 and newer. Pick a directory on a local disk with room for the database
+(all data will live in it) and create the master key:
 
 ```sh
 # Get the two files, either by cloning the repository ...
@@ -115,7 +116,7 @@ The services in `compose.yaml` (read the file; every setting has a comment):
 All data lives in plain directories beside `compose.yaml`, so you can find it and, with the stack
 stopped, back it up or move the installation by copying directories
 ([`operations.md`](operations.md#backup-and-restore)). A copy taken while MongoDB runs is not
-usable. Put the directory on a local disk with room for the database:
+usable. The installation directory looks like this:
 
 ```
 open-kase/
@@ -370,10 +371,12 @@ See [`operations.md`](operations.md#smtp).
 
 ## Upgrading
 
-**Installations created with a `compose.yaml` from v0.3.0 or earlier** keep their data in Docker
-named volumes; the current `compose.yaml` keeps it in `data/`. Move it once, as below, before the
-first `docker compose` command with the new file (in a cloned repository, `git pull` brings it).
-If you keep your old `compose.yaml` and only bump `OPEN_KASE_VERSION`, nothing changes for you.
+**Installations created with a `compose.yaml` from v0.3.0 or earlier** (one that ends with a
+top-level `volumes:` section) keep their data in Docker named volumes; the current `compose.yaml`
+keeps it in `data/`. Move it once, as below, before the first `docker compose up` or
+`docker compose run` with the new file (in a cloned repository, `git pull` brings it;
+`docker compose down` is safe with either file). If you keep your old `compose.yaml` and only bump
+`OPEN_KASE_VERSION`, nothing changes for you.
 
 Started without these steps, the new file creates an empty database in `data/mongo`: the
 application does not become ready and `doctor` reports `installation not initialized`. Do not run
@@ -388,22 +391,24 @@ free disk space as the volumes use.
    profile also `open-kase_caddy-data` and `open-kase_caddy-config` (the prefix is the Compose
    project name; if yours differs, change the commands below).
 3. In the installation directory, copy each volume into its new directory, which Docker creates.
-   `cp -a` keeps owners and modes. Each command stops with a message, instead of copying, when the
-   volume holds no database or the directory is not empty:
+   `cp -a` keeps owners and modes. Nothing is copied, and a message says why, when a volume does
+   not exist, the MongoDB volume holds no database or the target directory is not empty:
 
    ```sh
-   docker run --rm -v open-kase_mongo-data:/from:ro -v "$PWD/data/mongo":/to alpine:3.24 sh -c '
-     test -f /from/WiredTiger || { echo "no database in this volume" >&2; exit 1; }
-     test -z "$(ls -A /to)" || { echo "data/mongo is not empty" >&2; exit 1; }
-     cp -a /from/. /to/'
-   # caddy profile only (on the nginx profile these two volumes do not exist). The chmod removes
-   # the world-writable mode that the volumes carried from the image:
+   docker volume inspect open-kase_mongo-data >/dev/null &&
+     docker run --rm -v open-kase_mongo-data:/from:ro -v "$PWD/data/mongo":/to alpine:3.24 sh -c '
+       test -f /from/WiredTiger || { echo "no database in this volume" >&2; exit 1; }
+       test -z "$(ls -A /to)" || { echo "data/mongo is not empty" >&2; exit 1; }
+       cp -a /from/. /to/'
+   # Caddy's two volumes exist only on the caddy profile and are skipped otherwise. The chmod
+   # removes the world-writable mode that the volumes carried from the image:
    for v in data config; do
+     docker volume inspect "open-kase_caddy-$v" >/dev/null 2>&1 ||
+       { echo "no volume open-kase_caddy-$v: skipped"; continue; }
      docker run --rm -v "open-kase_caddy-$v":/from:ro -v "$PWD/data/caddy/$v":/to alpine:3.24 sh -c '
        test -z "$(ls -A /to)" || { echo "the target directory is not empty" >&2; exit 1; }
-       cp -a /from/. /to/'
+       cp -a /from/. /to/' && sudo chmod -R go-w "data/caddy/$v"
    done
-   sudo chmod -R go-w data/caddy
    ```
 
 4. With the new `compose.yaml` in place: `docker compose up -d`, then
