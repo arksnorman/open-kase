@@ -104,11 +104,29 @@ The services in `compose.yaml` (read the file; every setting has a comment):
 
 | Service | Profile | What it is |
 | --- | --- | --- |
-| `mongo` | always | `mongo:8.0.34` with authentication and a replica-set keyfile; initiates the single-member replica set `rs0` on first start; no published port |
+| `mongo` | always | `mongo:8.0.34` with authentication and a replica-set keyfile; initiates the single-member replica set `rs0` on first start; data in `data/mongo`; no published port |
 | `redis` | always | `redis:8.2.2-alpine` with a password, no persistence; no published port |
 | `open-kase` | always | `ghcr.io/arksnorman/open-kase:${OPEN_KASE_VERSION:-0.3.0}`: API, MCP and web UI on port 8080, no published port; trusts proxies in `172.16.0.0/12` |
 | `nginx` | `nginx` | `nginx:1.30.6`, TLS on `HTTP_PORT`/`HTTPS_PORT`, proxies to `open-kase:8080`; configuration inline (`configs:`) |
-| `caddy` | `caddy` | `caddy:2.11.8-alpine`, same role; configuration inline; data in the `caddy-data` and `caddy-config` volumes |
+| `caddy` | `caddy` | `caddy:2.11.8-alpine`, same role; configuration inline; data in `data/caddy` |
+
+All data lives in plain directories beside `compose.yaml`, so you can find it, back it up and move
+the installation by copying directories:
+
+```
+open-kase/
+  compose.yaml
+  .env              settings and the Compose passwords
+  data/mongo/       the MongoDB database files
+  data/caddy/       Caddy's certificates and configuration (caddy profile only)
+  secrets/          master key, MongoDB and Redis passwords, replica-set keyfile
+  certs/            the nginx certificate and key (or your own)
+```
+
+Docker creates the `data/` directories on first start. MongoDB's files are owned by the
+container's user, so reading or copying them needs root. `secrets/` and `certs/` are deliberately
+outside `data/`: the master key must be backed up separately from the database
+([`operations.md`](operations.md#backup-and-restore)), so a copy of `data/` does not contain it.
 
 Run `docker compose config -q` to validate the file and your `.env`.
 
@@ -181,7 +199,7 @@ The image is the Debian-based `nginx`, not `nginx:*-alpine`: neither alpine vari
 
 ### Caddy (`COMPOSE_PROFILES=caddy`)
 
-Caddy obtains certificates by itself and keeps them in the `caddy-data` volume.
+Caddy obtains certificates by itself and keeps them in `data/caddy/data`.
 
 - For a public domain name in `SITE_NAME`, it gets and renews a Let's Encrypt certificate. The
   name must resolve to this host and ports 80 and 443 must be reachable from the internet (so
@@ -354,6 +372,30 @@ docker compose pull open-kase
 docker compose up -d open-kase
 docker compose run --rm open-kase doctor
 ```
+
+**Installations created with a `compose.yaml` from v0.3.0 or earlier** kept their data in Docker
+named volumes. Do this once before using the new `compose.yaml`: starting it without the steps
+below starts an **empty database**, while your data stays untouched in the old volume. If you only
+bump `OPEN_KASE_VERSION` and keep your old `compose.yaml`, nothing changes for you.
+
+1. `docker compose down`
+2. Check the volume names with `docker volume ls`. They start with the Compose project name
+   (`name: open-kase` in the file), for example `open-kase_mongo-data`.
+3. Copy each old volume into its new directory, keeping ownership and modes (as root if your user
+   cannot write there). If you use the caddy profile, do the same for `caddy-data` and
+   `caddy-config`:
+
+   ```sh
+   mkdir -p data/mongo data/caddy/data data/caddy/config
+   docker run --rm -v open-kase_mongo-data:/from -v "$PWD/data/mongo":/to alpine cp -a /from/. /to/
+   docker run --rm -v open-kase_caddy-data:/from -v "$PWD/data/caddy/data":/to alpine cp -a /from/. /to/
+   docker run --rm -v open-kase_caddy-config:/from -v "$PWD/data/caddy/config":/to alpine cp -a /from/. /to/
+   ```
+
+4. Replace `compose.yaml` with the new one and run `docker compose up -d`, then
+   `docker compose run --rm open-kase doctor`.
+5. After checking that your tickets are there, remove the old volumes:
+   `docker volume rm open-kase_mongo-data open-kase_caddy-data open-kase_caddy-config`.
 
 Native: replace `/usr/local/bin/open-kase` and the UI directory, then `systemctl restart open-kase`.
 

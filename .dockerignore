@@ -13,5 +13,6 @@ docs
 **/*.test
 compose.yaml
 .env.example
+data
 certs
 secrets

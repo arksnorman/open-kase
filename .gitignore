@@ -8,7 +8,8 @@
 *.key
 *.pem
 
-# Compose runtime data (generated certificates, secret files)
+# Compose runtime data (database and proxy data, generated certificates, secret files)
+/data/
 /certs/
 /secrets/
 

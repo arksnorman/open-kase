@@ -78,6 +78,28 @@ database; `--oplog` cannot be combined with `--db`, so drop `--db open_kase` in 
 Schedule the dump (cron or a systemd timer), copy archives off the host, and test a restore
 regularly. Retention is up to you.
 
+### Moving to another machine
+
+To move a Docker Compose installation, or restore it from a copy of its directory, stop the stack
+and copy the whole install directory (`compose.yaml`, `.env`, `data/`, `secrets/`, `certs/`) as
+root, keeping ownership and modes:
+
+```sh
+docker compose down
+sudo rsync -a open-kase/ newhost:/path/to/open-kase/     # or: sudo tar -C open-kase -cpf - . | ...
+# on the new machine, in the copied directory:
+docker compose up -d
+docker compose run --rm open-kase doctor
+```
+
+Never copy `data/mongo` while the stack is running: a copy of a running MongoDB's files is not a
+usable backup. Use `mongodump` above for that.
+
+A copy of `data/` alone does not contain the master key. A copy of the whole install directory
+contains both the database and the key, so protect it like the key. If the host name changes, update
+`SITE_NAME` in `.env` and check the certificate
+([`install.md`](install.md#reverse-proxy-and-tls)).
+
 ### Restoring
 
 1. Stop the application: `docker compose stop open-kase` (or `systemctl stop open-kase`).
