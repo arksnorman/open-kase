@@ -31,7 +31,8 @@ var (
 	StatusLabel     = define(Rule{Field: "status.label", Kind: KindText, Required: true, MinLen: 1, MaxLen: 60})
 	StatusCategory  = define(Rule{Field: "status.category", Kind: KindEnum, Required: true, Choices: []string{"open", "waitingCustomer", "onHold", "resolved", "archived"}})
 	RequestTypeName = define(Rule{Field: "requestType.name", Kind: KindText, Required: true, MinLen: 1, MaxLen: 60})
-	RequestTypeCode = define(Rule{Field: "requestType.code", Kind: KindText, Required: true, MinLen: 2, MaxLen: 40, Pattern: regexp.MustCompile(`^[a-z][a-zA-Z0-9]{1,39}$`)})
+	RequestTypeCode = define(Rule{Field: "requestType.code", Kind: KindText, Required: true, MinLen: 2, MaxLen: 40, Pattern: regexp.MustCompile(`^[a-z][a-zA-Z0-9]{1,39}$`),
+		Message: "Use 2 to 40 letters and digits, starting with a lowercase letter."})
 )
 
 // Tickets and messages.

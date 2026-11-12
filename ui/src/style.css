@@ -389,6 +389,10 @@
     background: var(--kase-surface);
     color: var(--kase-text);
   }
+  .lg-icon-btn:disabled,
+  .lg-icon-btn-b:disabled {
+    opacity: 0.4;
+  }
   .lg-chip {
     height: 30px;
     display: inline-flex;

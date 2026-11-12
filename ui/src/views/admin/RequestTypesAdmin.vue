@@ -3,7 +3,7 @@
 // type in this order is the default for new tickets; a deactivated type stays on the tickets that have
 // it. The code is chosen at creation and never changes: integrations map by code.
 import { IconArrowDown, IconArrowUp, IconPlayerPause, IconPlayerPlay, IconPlus } from '@tabler/icons-vue'
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { requestTypesApi } from '@/api/endpoints'
 import { ApiError } from '@/api/errors'
 import type { RequestType } from '@/api/types'
@@ -11,11 +11,18 @@ import { BaseAlert, BaseBadge, BaseButton, BaseModal, DataTable, FormField, Icon
 import { invalidate, useQuery } from '@/composables/useQuery'
 import AdminPage from './AdminPage.vue'
 
+// The page's own list has its own cache key, so a change can drop the lists the pickers and the queue
+// filter cache (`request-types…`) while this one reloads in place: the rows stay on screen, and so
+// does keyboard focus.
 const typesQ = useQuery(
-  () => 'request-types:all',
+  () => 'admin:request-types',
   (signal) => requestTypesApi.list('all', { signal }),
 )
 const types = computed(() => typesQ.data.value?.items ?? [])
+async function reload() {
+  invalidate('request-types')
+  await typesQ.refetch()
+}
 
 const columns: Column[] = [
   { key: 'name', label: 'Name', class: 'font-medium' },
@@ -70,12 +77,12 @@ async function save() {
   try {
     if (editing.value) await requestTypesApi.update(editing.value, { name: n })
     else await requestTypesApi.create(c ? { name: n, code: c } : { name: n })
+    await reload()
     open.value = false
-    invalidate('request-types')
   } catch (err) {
     // Field errors (name, code) show under their fields; other known errors read as a sentence.
     error.value = err
-    if (stale(err)) invalidate('request-types')
+    if (stale(err)) void reload()
   } finally {
     busy.value = false
   }
@@ -97,48 +104,41 @@ async function setActive(t: RequestType, active: boolean) {
   } catch (err) {
     listError.value = explain(err)
   } finally {
-    invalidate('request-types')
+    await reload()
     toggling.value = null
   }
 }
 
 // ---- order ----
-const moving = ref(false)
-let focusAfter: string | null = null
+let moving = false
 async function move(t: RequestType, dir: -1 | 1) {
+  if (moving) return
   const ids = types.value.map((x) => x.id)
   const from = ids.indexOf(t.id)
   const to = from + dir
   if (from < 0 || to < 0 || to >= ids.length) return
   ;[ids[from], ids[to]] = [ids[to]!, ids[from]!]
-  moving.value = true
+  moving = true
   listError.value = null
-  focusAfter = `${t.id}:${dir === -1 ? 'up' : 'down'}`
   try {
-    await requestTypesApi.reorder(ids)
-  } catch (err) {
-    focusAfter = null
-    listError.value = explain(err)
-  } finally {
+    // The answer is the whole list in its new order.
+    typesQ.set(await requestTypesApi.reorder(ids))
     invalidate('request-types')
-    moving.value = false
+    await nextTick()
+    // Keep keyboard focus on the pressed arrow so it can be pressed again. Moving the row can drop
+    // focus, and at the first or last row the arrow is now disabled (the browser is about to drop
+    // focus from it): the row's other arrow takes it then.
+    const arrow = (d: -1 | 1) => document.querySelector<HTMLButtonElement>(`[data-move="${t.id}:${d === -1 ? 'up' : 'down'}"]`)
+    const same = arrow(dir)
+    const at = document.activeElement
+    if (at === null || at === document.body || (at === same && same.disabled)) (same && !same.disabled ? same : arrow(dir === -1 ? 1 : -1))?.focus()
+  } catch (err) {
+    listError.value = explain(err)
+    await reload()
+  } finally {
+    moving = false
   }
 }
-// Keep keyboard focus on the moved row's button once the list re-renders (or on its other arrow
-// when it reached the first or last row and this one became disabled).
-watch(
-  () => types.value.map((t) => t.id).join(','),
-  async () => {
-    const want = focusAfter
-    focusAfter = null
-    if (!want) return
-    await nextTick()
-    const [id, dir] = want.split(':')
-    const pick = (d: string) => document.querySelector<HTMLButtonElement>(`[data-move="${id}:${d}"]`)
-    const btn = pick(dir!)
-    ;(btn && !btn.disabled ? btn : pick(dir === 'up' ? 'down' : 'up'))?.focus()
-  },
-)
 
 // ---- delete ----
 const deleting = ref<RequestType | null>(null)
@@ -156,10 +156,17 @@ async function confirmDelete() {
     if (err instanceof ApiError && err.is('requestTypeNotFound')) deleting.value = null
     else deleteError.value = explain(err)
   } finally {
-    invalidate('request-types')
+    await reload()
     deleteBusy.value = false
   }
 }
+/** Why a type that tickets use cannot be deleted, and what to do instead. */
+const inUseText = computed(() => {
+  const t = deleting.value
+  if (!t || !t.inUse) return ''
+  const n = `${t.inUse} ticket${t.inUse === 1 ? ' uses' : 's use'} this request type, so it cannot be deleted.`
+  return t.active ? `${n} Deactivate it instead: it stays on those tickets and is no longer offered for new ones.` : `${n} It is inactive, so it is no longer offered for new tickets.`
+})
 </script>
 
 <template>
@@ -195,10 +202,10 @@ async function confirmDelete() {
         <template #cell-inUse="{ row }"><span class="lg-mono" :class="row.inUse ? '' : 'text-muted'">{{ row.inUse }}</span></template>
         <template #cell-order="{ row }">
           <div class="flex gap-1">
-            <IconButton :label="`Move ${row.name} up`" tip="Move up" :data-move="`${row.id}:up`" :disabled="moving || types[0]?.id === row.id" @click="move(row, -1)">
+            <IconButton :label="`Move ${row.name} up`" tip="Move up" :data-move="`${row.id}:up`" :disabled="types[0]?.id === row.id" @click="move(row, -1)">
               <IconArrowUp :size="16" stroke="1.75" />
             </IconButton>
-            <IconButton :label="`Move ${row.name} down`" tip="Move down" :data-move="`${row.id}:down`" :disabled="moving || types[types.length - 1]?.id === row.id" @click="move(row, 1)">
+            <IconButton :label="`Move ${row.name} down`" tip="Move down" :data-move="`${row.id}:down`" :disabled="types[types.length - 1]?.id === row.id" @click="move(row, 1)">
               <IconArrowDown :size="16" stroke="1.75" />
             </IconButton>
           </div>
@@ -206,18 +213,12 @@ async function confirmDelete() {
         <template #cell-manage="{ row }">
           <div class="flex gap-1.5">
             <BaseButton size="sm" aria-haspopup="dialog" @click="openEditor(row)">Rename</BaseButton>
-            <BaseButton v-if="!row.active" size="sm" :loading="toggling === row.id" @click="setActive(row, true)">
-              <template #icon><IconPlayerPlay :size="14" stroke="1.75" aria-hidden="true" /></template>
-              Reactivate
+            <!-- One button for both states, so focus stays on it after the change. -->
+            <BaseButton size="sm" :loading="toggling === row.id" v-tooltip="row.active ? 'Hide from pickers; tickets that have it keep it' : undefined" @click="setActive(row, !row.active)">
+              <template #icon><component :is="row.active ? IconPlayerPause : IconPlayerPlay" :size="14" stroke="1.75" aria-hidden="true" /></template>
+              {{ row.active ? 'Deactivate' : 'Reactivate' }}
             </BaseButton>
-            <BaseButton v-else size="sm" :loading="toggling === row.id" v-tooltip="'Hide from pickers; tickets that have it keep it'" @click="setActive(row, false)">
-              <template #icon><IconPlayerPause :size="14" stroke="1.75" aria-hidden="true" /></template>
-              Deactivate
-            </BaseButton>
-            <span v-if="row.inUse > 0" class="inline-flex" v-tooltip="'Tickets use this request type. Deactivate it instead.'">
-              <BaseButton size="sm" variant="danger" disabled>Delete</BaseButton>
-            </span>
-            <BaseButton v-else size="sm" variant="danger" aria-haspopup="dialog" @click="((deleteError = null), (deleting = row))">Delete</BaseButton>
+            <BaseButton size="sm" variant="danger" aria-haspopup="dialog" @click="((deleteError = null), (deleting = row))">Delete</BaseButton>
           </div>
         </template>
       </DataTable>
@@ -243,14 +244,14 @@ async function confirmDelete() {
 
   <BaseModal
     :open="deleting !== null"
-    :title="`Delete “${deleting?.name ?? ''}”?`"
-    description="No ticket uses this request type. This cannot be undone."
+    :title="inUseText ? `“${deleting?.name ?? ''}” is in use` : `Delete “${deleting?.name ?? ''}”?`"
+    :description="inUseText || 'No ticket uses this request type. This cannot be undone.'"
     @update:open="(v) => !v && (deleting = null)"
   >
     <BaseAlert v-if="deleteError" :error="deleteError" />
     <template #footer>
-      <BaseButton @click="deleting = null">Cancel</BaseButton>
-      <BaseButton variant="danger" :loading="deleteBusy" @click="confirmDelete">Delete request type</BaseButton>
+      <BaseButton @click="deleting = null">{{ inUseText ? 'Close' : 'Cancel' }}</BaseButton>
+      <BaseButton v-if="!inUseText" variant="danger" :loading="deleteBusy" @click="confirmDelete">Delete request type</BaseButton>
     </template>
   </BaseModal>
 </template>
