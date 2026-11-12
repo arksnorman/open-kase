@@ -17,6 +17,7 @@ services:
       MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo_root_password
     secrets: [mongo_root_password, mongo_keyfile]
     volumes:
+      # The database files, in ./data/mongo beside this file.
       - ./data/mongo:/data/db
     # Initiates the single-member replica set on first start, then reports
     # healthy once there is a primary. No port is published.
@@ -135,6 +136,7 @@ services:
       - source: caddyfile
         target: /etc/caddy/Caddyfile
     volumes:
+      # Caddy's certificates and saved configuration, in ./data/caddy beside this file.
       - ./data/caddy/data:/data
       - ./data/caddy/config:/config
       # To use your own certificate instead, uncomment the next line and the "tls" line

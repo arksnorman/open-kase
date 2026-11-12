@@ -49,8 +49,10 @@ application refuse to become ready.
 
 ## Docker Compose
 
-Requires Docker with Compose v2.23 or newer (the proxy configuration is embedded in the
+Requires a Linux host and Docker with Compose v2.23 or newer (the proxy configuration is embedded in the
 repository's `compose.yaml` with `configs: content:`, which older versions reject; check `docker compose version`).
+MongoDB's data directory is a host directory (`data/mongo`), which the `mongo` image does not
+support on Docker Desktop for macOS or Windows.
 MongoDB shares the host's Linux kernel, and MongoDB 8.0 refuses to
 start on kernels 6.19 to 7.0.13 because of a kernel bug (see
 [SERVER-125742](https://jira.mongodb.org/browse/SERVER-125742)); check `uname -r` and use a kernel
@@ -110,8 +112,10 @@ The services in `compose.yaml` (read the file; every setting has a comment):
 | `nginx` | `nginx` | `nginx:1.30.6`, TLS on `HTTP_PORT`/`HTTPS_PORT`, proxies to `open-kase:8080`; configuration inline (`configs:`) |
 | `caddy` | `caddy` | `caddy:2.11.8-alpine`, same role; configuration inline; data in `data/caddy` |
 
-All data lives in plain directories beside `compose.yaml`, so you can find it, back it up and move
-the installation by copying directories:
+All data lives in plain directories beside `compose.yaml`, so you can find it and, with the stack
+stopped, back it up or move the installation by copying directories
+([`operations.md`](operations.md#backup-and-restore)). A copy taken while MongoDB runs is not
+usable. Put the directory on a local disk with room for the database:
 
 ```
 open-kase/
@@ -148,7 +152,8 @@ The application is now running behind the proxy chosen in `COMPOSE_PROFILES`, an
 health check (`open-kase health`) shows in `docker compose ps`. Continue with the reverse proxy
 below. The compose file pins the
 release (`:0.3.0`); to upgrade, set `OPEN_KASE_VERSION` in `.env` to the new version and run `docker compose pull &&
-docker compose up -d`. `latest` follows the newest release tag and `edge` is the head of `main`
+docker compose up -d` (installations from v0.3.0 or earlier: read [Upgrading](#upgrading) before
+using a newer `compose.yaml`). `latest` follows the newest release tag and `edge` is the head of `main`
 (published only after CI passed); neither is meant for production.
 
 Pushes to `main` and `v*` tags run the CI checks first (the release workflow calls them); the image
@@ -365,37 +370,55 @@ See [`operations.md`](operations.md#smtp).
 
 ## Upgrading
 
-Docker Compose:
+**Installations created with a `compose.yaml` from v0.3.0 or earlier** keep their data in Docker
+named volumes; the current `compose.yaml` keeps it in `data/`. Move it once, as below, before the
+first `docker compose` command with the new file (in a cloned repository, `git pull` brings it).
+If you keep your old `compose.yaml` and only bump `OPEN_KASE_VERSION`, nothing changes for you.
+
+Started without these steps, the new file creates an empty database in `data/mongo`: the
+application does not become ready and `doctor` reports `installation not initialized`. Do not run
+`init`; your data is untouched in the old volume. Run `sudo mv data data.unused` after step 1 and
+carry on (delete `data.unused` after step 5).
+
+Take a backup first ([`operations.md`](operations.md#backup-and-restore)). The copy needs as much
+free disk space as the volumes use.
+
+1. `docker compose down`
+2. Check the volume names with `docker volume ls`: `open-kase_mongo-data`, and with the caddy
+   profile also `open-kase_caddy-data` and `open-kase_caddy-config` (the prefix is the Compose
+   project name; if yours differs, change the commands below).
+3. In the installation directory, copy each volume into its new directory, which Docker creates.
+   `cp -a` keeps owners and modes. Each command stops with a message, instead of copying, when the
+   volume holds no database or the directory is not empty:
+
+   ```sh
+   docker run --rm -v open-kase_mongo-data:/from:ro -v "$PWD/data/mongo":/to alpine:3.24 sh -c '
+     test -f /from/WiredTiger || { echo "no database in this volume" >&2; exit 1; }
+     test -z "$(ls -A /to)" || { echo "data/mongo is not empty" >&2; exit 1; }
+     cp -a /from/. /to/'
+   # caddy profile only (on the nginx profile these two volumes do not exist). The chmod removes
+   # the world-writable mode that the volumes carried from the image:
+   for v in data config; do
+     docker run --rm -v "open-kase_caddy-$v":/from:ro -v "$PWD/data/caddy/$v":/to alpine:3.24 sh -c '
+       test -z "$(ls -A /to)" || { echo "the target directory is not empty" >&2; exit 1; }
+       cp -a /from/. /to/'
+   done
+   sudo chmod -R go-w data/caddy
+   ```
+
+4. With the new `compose.yaml` in place: `docker compose up -d`, then
+   `docker compose run --rm open-kase doctor`.
+5. After checking that your tickets are there, remove the old volumes:
+   `docker volume rm open-kase_mongo-data`, and with the caddy profile also
+   `docker volume rm open-kase_caddy-data open-kase_caddy-config`.
+
+Every upgrade, Docker Compose:
 
 ```sh
 docker compose pull open-kase
 docker compose up -d open-kase
 docker compose run --rm open-kase doctor
 ```
-
-**Installations created with a `compose.yaml` from v0.3.0 or earlier** kept their data in Docker
-named volumes. Do this once before using the new `compose.yaml`: starting it without the steps
-below starts an **empty database**, while your data stays untouched in the old volume. If you only
-bump `OPEN_KASE_VERSION` and keep your old `compose.yaml`, nothing changes for you.
-
-1. `docker compose down`
-2. Check the volume names with `docker volume ls`. They start with the Compose project name
-   (`name: open-kase` in the file), for example `open-kase_mongo-data`.
-3. Copy each old volume into its new directory, keeping ownership and modes (as root if your user
-   cannot write there). If you use the caddy profile, do the same for `caddy-data` and
-   `caddy-config`:
-
-   ```sh
-   mkdir -p data/mongo data/caddy/data data/caddy/config
-   docker run --rm -v open-kase_mongo-data:/from -v "$PWD/data/mongo":/to alpine cp -a /from/. /to/
-   docker run --rm -v open-kase_caddy-data:/from -v "$PWD/data/caddy/data":/to alpine cp -a /from/. /to/
-   docker run --rm -v open-kase_caddy-config:/from -v "$PWD/data/caddy/config":/to alpine cp -a /from/. /to/
-   ```
-
-4. Replace `compose.yaml` with the new one and run `docker compose up -d`, then
-   `docker compose run --rm open-kase doctor`.
-5. After checking that your tickets are there, remove the old volumes:
-   `docker volume rm open-kase_mongo-data open-kase_caddy-data open-kase_caddy-config`.
 
 Native: replace `/usr/local/bin/open-kase` and the UI directory, then `systemctl restart open-kase`.
 

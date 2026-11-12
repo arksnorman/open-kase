@@ -393,7 +393,8 @@ Behaviour worth knowing:
 
 The release artifact is one container image, `ghcr.io/arksnorman/open-kase`, built from the root `Dockerfile`. It
 contains the `open-kase` binary and the built SPA; the container runs `serve --ui-dir /srv/ui`, so one process serves
-the API, MCP and the UI. `docs/install.md` gives a Docker Compose file with three services (MongoDB as a single-node
-replica set, Redis, and `open-kase`) and the first-run steps (`init`, `doctor`), plus a native-binary install and
-reverse proxy notes. Day-two tasks are in `docs/operations.md`. This is a single-host setup and is not highly
-available; nothing here describes a multi-replica profile.
+the API, MCP and the UI. The root `compose.yaml` runs MongoDB (a single-node replica set), Redis and `open-kase`
+behind a bundled TLS proxy (nginx or Caddy) and keeps its data in host directories under `data/`. `docs/install.md`
+has the first-run steps (`init`, `doctor`), a native-binary install and reverse proxy notes. Day-two tasks are in
+`docs/operations.md`. This is a single-host setup and is not highly available; nothing here describes a
+multi-replica profile.

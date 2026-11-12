@@ -78,27 +78,22 @@ database; `--oplog` cannot be combined with `--db`, so drop `--db open_kase` in 
 Schedule the dump (cron or a systemd timer), copy archives off the host, and test a restore
 regularly. Retention is up to you.
 
-### Moving to another machine
+### Copying the data directory instead
 
-To move a Docker Compose installation, or restore it from a copy of its directory, stop the stack
-and copy the whole install directory (`compose.yaml`, `.env`, `data/`, `secrets/`, `certs/`) as
-root, keeping ownership and modes:
+A Docker Compose installation keeps the database files in `data/mongo`, so with the stack stopped
+an archive of `data/` is a complete backup as well. It does not contain the master key:
 
 ```sh
 docker compose down
-sudo rsync -a open-kase/ newhost:/path/to/open-kase/     # or: sudo tar -C open-kase -cpf - . | ...
-# on the new machine, in the copied directory:
+sudo tar -czf open-kase-data-$(date -u +%Y%m%dT%H%M%SZ).tar.gz data
 docker compose up -d
-docker compose run --rm open-kase doctor
 ```
 
-Never copy `data/mongo` while the stack is running: a copy of a running MongoDB's files is not a
-usable backup. Use `mongodump` above for that.
-
-A copy of `data/` alone does not contain the master key. A copy of the whole install directory
-contains both the database and the key, so protect it like the key. If the host name changes, update
-`SITE_NAME` in `.env` and check the certificate
-([`install.md`](install.md#reverse-proxy-and-tls)).
+To restore it into the same installation (the same `secrets/` and `.env`): `docker compose down`,
+move the current directory aside (`sudo mv data data.old`), unpack the archive in the installation
+directory (`sudo tar -xzpf open-kase-data-20261102T020000Z.tar.gz`) and `docker compose up -d`.
+The helpdesk is down while the archive is made; `mongodump` above needs no downtime. Never copy
+`data/mongo` while the stack is running: a copy of a running MongoDB's files is not a usable backup.
 
 ### Restoring
 
@@ -131,6 +126,35 @@ two instances against the same database.
 - Configuration outside MongoDB: `compose.yaml`, the environment file, the systemd unit, the
   reverse proxy.
 
+### Moving to another machine
+
+A Docker Compose installation moves as one directory (a native one moves with a backup, a restore,
+the master key and the environment file). Prepare the new machine as for a new installation
+([`install.md`](install.md#docker-compose): Linux, Docker with Compose v2.23 or newer, a kernel
+MongoDB 8.0 accepts). Then stop the stack and copy the whole installation directory
+(`compose.yaml`, `.env`, `data/`, `secrets/`, `certs/`), as root on both machines so that owners
+and modes are kept:
+
+```sh
+# Old machine, in the installation directory:
+docker compose down
+(umask 077 && sudo tar -czf - . > ~/open-kase-move.tar.gz)
+scp ~/open-kase-move.tar.gz newhost:
+# New machine (mkdir fails rather than unpack over an existing directory):
+sudo mkdir /path/to/open-kase
+sudo tar -C /path/to/open-kase -xzpf ~/open-kase-move.tar.gz
+cd /path/to/open-kase
+sudo chown 65532:65532 secrets/master.key    # as in a new installation
+docker compose up -d
+docker compose run --rm open-kase doctor
+```
+
+If your user name differs on the new machine, run `sudo chown "$USER": . .env` so Compose can read
+`.env`. The archive holds the database and the master key: delete it on both machines once the new
+one works, and do not start the old installation again (both would send the same notifications).
+If the host name changes, update `SITE_NAME` in `.env`, the base URL (Settings → Configuration →
+General) and the certificate ([`install.md`](install.md#reverse-proxy-and-tls)).
+
 ## Background work
 
 `serve` runs the outbox dispatcher and job workers (email, webhooks, SLA timers, lifecycle
@@ -142,7 +166,8 @@ run `open-kase worker` separately.
 
 ## Upgrades
 
-See [`install.md`](install.md#upgrading). In short: back up, pull the new image (or replace the
+See [`install.md`](install.md#upgrading). Compose installations from v0.3.0 or earlier first move
+their data out of Docker volumes, once. In short: back up, pull the new image (or replace the
 binary), restart; `EnsureSchema` creates missing collections and indexes at start. There are no
 migrations. Rollback is restoring the backup taken before the upgrade and starting the older
 version; data written after the backup is lost.
