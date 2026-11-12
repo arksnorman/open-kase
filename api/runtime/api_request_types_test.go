@@ -1144,10 +1144,15 @@ func TestRequestTypeCodeOnUpdate(t *testing.T) {
 
 	// A requester-side token is refused exactly as it is for requestTypeId.
 	ikey := nf.createTicket(nf.integration, map[string]any{}).Ref()
-	byID := nf.do("PATCH", tpath(ikey), map[string]any{"requestTypeId": nf.rtID("issue")}, bearer(nf.integration)).Code
-	byCode := nf.do("PATCH", tpath(ikey), map[string]any{"requestTypeCode": "issue"}, bearer(nf.integration))
-	if byID != 403 || byCode.Code != byID {
-		t.Fatalf("requester-side update: by id %d, by code %d %s", byID, byCode.Code, byCode.Body)
+	// The subject alone is allowed for the token that created the ticket, so the type field is what is refused.
+	typeBefore := nf.do("GET", tpath(ikey), nil, bearer(nf.admin.Access)).expect(200).JSON()["requestType"].(map[string]any)["code"]
+	byID := nf.do("PATCH", tpath(ikey), map[string]any{"subject": "New subject", "requestTypeId": nf.rtID("question")}, bearer(nf.integration))
+	byCode := nf.do("PATCH", tpath(ikey), map[string]any{"subject": "New subject", "requestTypeCode": "question"}, bearer(nf.integration))
+	if byID.Code != 403 || byCode.Code != 403 || byCode.JSON()["code"] != byID.JSON()["code"] {
+		t.Fatalf("requester-side update: by id %d %s, by code %d %s", byID.Code, byID.Body, byCode.Code, byCode.Body)
+	}
+	if after := nf.do("GET", tpath(ikey), nil, bearer(nf.admin.Access)).expect(200).JSON()["requestType"].(map[string]any)["code"]; after != typeBefore || after == "question" {
+		t.Fatalf("requester-side update changed the type: %v -> %v", typeBefore, after)
 	}
 }
 
