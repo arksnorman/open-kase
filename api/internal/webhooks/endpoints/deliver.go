@@ -310,7 +310,7 @@ func (w *Deliverer) build(ctx context.Context, ep Endpoint, typ, eventID string)
 	case webhooks.TypeTicketCreated:
 		data["priority"], data["status"], data["group"] = snap.Priority, status, group
 		data["source"] = t.Source
-		data["requestType"] = requestType
+		data["requestType"] = requestTypeDTO{Id: t.RequestType.Id, Code: t.RequestType.Code, Name: t.RequestType.Name}
 		if err := w.addRequesterContext(ctx, data, t, snap); err != nil {
 			return nil, err
 		}

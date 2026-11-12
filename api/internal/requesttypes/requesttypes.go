@@ -413,6 +413,9 @@ func DeriveCode(name string) string {
 		b.WriteString(w)
 	}
 	code := strings.TrimLeft(b.String(), "0123456789")
+	if code != "" {
+		code = strings.ToLower(code[:1]) + code[1:]
+	}
 	if len(code) > 40 {
 		code = code[:40]
 	}
