@@ -86,14 +86,15 @@ func (a *api) removeLink(c *gin.Context) {
 
 // followUpRequest is the request body of createFollowUp.
 type followUpRequest struct {
-	Subject       *string  `json:"subject" doc:"Defaults to the original ticket's subject."`
-	Body          *string  `json:"body" doc:"First public message; defaults to \"Follow-up to <KEY>.\""`
-	Priority      *int     `json:"priority" minimum:"1" maximum:"4"`
-	AddSignature  *bool    `json:"addSignature" doc:"Users only: false skips your signature and the workspace signature on the first message."`
-	GroupId       *string  `json:"groupId" doc:"Defaults to the original's group (Triage when inactive)."`
-	RequestTypeId *string  `json:"requestTypeId" doc:"Defaults to the original's request type (the default type when that one is inactive). An inactive type is refused."`
-	Tags          []string `json:"tags" doc:"Catalog tags for the follow-up (none by default)."`
-	ContactId     string   `json:"contactId" doc:"Only when the first message is written as the requester (a token with neither tickets:comment nor tickets:all): open the follow-up as this contact of the original's organisation (contactNotInOrganisation otherwise): they become the requester of the new ticket and author its first message. Users and tokens that write as the bot: 422 notAllowed."`
+	Subject         *string  `json:"subject" doc:"Defaults to the original ticket's subject."`
+	Body            *string  `json:"body" doc:"First public message; defaults to \"Follow-up to <KEY>.\""`
+	Priority        *int     `json:"priority" minimum:"1" maximum:"4"`
+	AddSignature    *bool    `json:"addSignature" doc:"Users only: false skips your signature and the workspace signature on the first message."`
+	GroupId         *string  `json:"groupId" doc:"Defaults to the original's group (Triage when inactive)."`
+	RequestTypeId   *string  `json:"requestTypeId" doc:"Defaults to the original's request type (the default type when that one is inactive). An inactive type is refused."`
+	RequestTypeCode *string  `json:"requestTypeCode" doc:"Alternative to requestTypeId (not both: 422 notAllowed). The type's stable code; no such type is 422 notFound, an inactive one 422 inactive."`
+	Tags            []string `json:"tags" doc:"Catalog tags for the follow-up (none by default)."`
+	ContactId       string   `json:"contactId" doc:"Only when the first message is written as the requester (a token with neither tickets:comment nor tickets:all): open the follow-up as this contact of the original's organisation (contactNotInOrganisation otherwise): they become the requester of the new ticket and author its first message. Users and tokens that write as the bot: 422 notAllowed."`
 }
 
 func (a *api) createFollowUp(c *gin.Context) {
@@ -106,7 +107,7 @@ func (a *api) createFollowUp(c *gin.Context) {
 		return
 	}
 	t, err := a.Tickets.FollowUp(c.Request.Context(), s, c.Param("t"), tickets.FollowUpInput{Subject: body.Subject, Body: body.Body, Priority: body.Priority,
-		GroupId: body.GroupId, RequestTypeId: body.RequestTypeId, Tags: body.Tags,
+		GroupId: body.GroupId, RequestTypeId: body.RequestTypeId, RequestTypeCode: body.RequestTypeCode, Tags: body.Tags,
 		NoSignature: body.AddSignature != nil && !*body.AddSignature, ContactId: body.ContactId})
 	if err == nil {
 		c.Header("Location", "/api/v1/tickets/"+strconv.FormatInt(t.Number, 10))
@@ -120,6 +121,7 @@ type copyRequest struct {
 	GroupId            *string   `json:"groupId" doc:"Defaults to the original's group (the Triage group when it is inactive)."`
 	Priority           *int      `json:"priority" minimum:"1" maximum:"4" doc:"Defaults to the original's priority."`
 	RequestTypeId      *string   `json:"requestTypeId" doc:"Defaults to the original's request type (the default type when that one is inactive). An inactive type is refused."`
+	RequestTypeCode    *string   `json:"requestTypeCode" doc:"Alternative to requestTypeId (not both: 422 notAllowed). The type's stable code; no such type is 422 notFound, an inactive one 422 inactive."`
 	Tags               *[]string `json:"tags" doc:"Catalog tags; defaults to the original's tags that still exist."`
 	Body               *string   `json:"body" doc:"First public message; defaults to the original's first public message."`
 	IncludeAttachments *bool     `json:"includeAttachments" doc:"Copy the original first message's attachments (default true)."`
@@ -135,7 +137,7 @@ func (a *api) copyTicket(c *gin.Context) {
 		return
 	}
 	t, err := a.Tickets.Copy(c.Request.Context(), s, c.Param("t"), tickets.CopyInput{Subject: body.Subject, GroupId: body.GroupId, Priority: body.Priority,
-		RequestTypeId: body.RequestTypeId, Tags: body.Tags, Body: body.Body, IncludeAttachments: body.IncludeAttachments})
+		RequestTypeId: body.RequestTypeId, RequestTypeCode: body.RequestTypeCode, Tags: body.Tags, Body: body.Body, IncludeAttachments: body.IncludeAttachments})
 	if err == nil {
 		c.Header("Location", "/api/v1/tickets/"+strconv.FormatInt(t.Number, 10))
 	}

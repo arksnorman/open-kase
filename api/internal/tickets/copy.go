@@ -21,7 +21,9 @@ type CopyInput struct {
 	GroupId       *string
 	Priority      *int
 	RequestTypeId *string
-	Tags          *[]string
+	// RequestTypeCode is the alternative to RequestTypeId.
+	RequestTypeCode *string
+	Tags            *[]string
 	// Body is the first message; the original's first public message by default.
 	Body *string
 	// IncludeAttachments copies the original first message's files
@@ -47,7 +49,7 @@ func (s *Service) Copy(ctx context.Context, scope *access.ProjectScope, ref stri
 	if !scope.Principal.IsStaff() {
 		return Ticket{}, fault.Forbidden("staffOnly", "Only support staff can copy tickets.")
 	}
-	if err := requireOverrides(scope, in.GroupId, in.RequestTypeId, in.Tags != nil && len(*in.Tags) > 0); err != nil {
+	if err := requireOverrides(scope, in.GroupId, in.RequestTypeId != nil || in.RequestTypeCode != nil, in.Tags != nil && len(*in.Tags) > 0); err != nil {
 		return Ticket{}, err
 	}
 	orig, err := s.load(ctx, scope, ref)
@@ -78,7 +80,7 @@ func (s *Service) Copy(ctx context.Context, scope *access.ProjectScope, ref stri
 		subject = *in.Subject
 	}
 	contactID := orig.Requester.Id
-	cin := CreateInput{Subject: subject, Body: body, Priority: in.Priority, GroupId: in.GroupId, RequestTypeId: in.RequestTypeId,
+	cin := CreateInput{Subject: subject, Body: body, Priority: in.Priority, GroupId: in.GroupId, RequestTypeId: in.RequestTypeId, RequestTypeCode: in.RequestTypeCode,
 		Requester: RequesterInput{ContactId: &contactID}, OrganisationId: orgIDPtr(orig), keepOrganisation: true, CCEmails: orig.CCEmails}
 	if cin.Priority == nil {
 		p := orig.Priority
@@ -92,7 +94,7 @@ func (s *Service) Copy(ctx context.Context, scope *access.ProjectScope, ref stri
 			return Ticket{}, err
 		}
 	}
-	if cin.RequestTypeId == nil {
+	if cin.RequestTypeId == nil && cin.RequestTypeCode == nil {
 		rt, err := s.copiedRequestType(ctx, scope, orig.RequestType.Id)
 		if err != nil {
 			return Ticket{}, err
@@ -164,7 +166,7 @@ func (s *Service) precheckCopy(ctx context.Context, scope *access.ProjectScope, 
 			return fault.Field("groupId", "inactive", "The group is inactive.")
 		}
 	}
-	if _, err := s.requestType(ctx, scope, cin.RequestTypeId); err != nil {
+	if _, err := s.requestType(ctx, scope, cin.RequestTypeId, cin.RequestTypeCode); err != nil {
 		return err
 	}
 	if len(cin.Tags) > 0 {

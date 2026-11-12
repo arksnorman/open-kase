@@ -252,7 +252,9 @@ type FollowUpInput struct {
 	// original (group, request type) or left empty (tags).
 	GroupId       *string
 	RequestTypeId *string
-	Tags          []string
+	// RequestTypeCode is the alternative to RequestTypeId.
+	RequestTypeCode *string
+	Tags            []string
 	// NoSignature skips the author's signatures on the first message.
 	NoSignature bool
 	// ContactId opens the follow-up as another contact of the original's
@@ -274,7 +276,7 @@ func (s *Service) FollowUp(ctx context.Context, scope *access.ProjectScope, ref 
 	if err := scope.Require(access.CapTicketCreate); err != nil {
 		return Ticket{}, err
 	}
-	if err := requireOverrides(scope, in.GroupId, in.RequestTypeId, len(in.Tags) > 0); err != nil {
+	if err := requireOverrides(scope, in.GroupId, in.RequestTypeId != nil || in.RequestTypeCode != nil, len(in.Tags) > 0); err != nil {
 		return Ticket{}, err
 	}
 	if in.ContactId != "" {
@@ -323,8 +325,8 @@ func (s *Service) FollowUp(ctx context.Context, scope *access.ProjectScope, ref 
 	} else if err != nil && !errors.Is(err, ErrNotFound) {
 		return Ticket{}, err
 	}
-	if in.RequestTypeId != nil {
-		cin.RequestTypeId = in.RequestTypeId
+	if in.RequestTypeId != nil || in.RequestTypeCode != nil {
+		cin.RequestTypeId, cin.RequestTypeCode = in.RequestTypeId, in.RequestTypeCode
 	} else if cin.RequestTypeId, err = s.copiedRequestType(ctx, scope, orig.RequestType.Id); err != nil {
 		return Ticket{}, err // an inactive or removed type gives the default
 	}
@@ -340,8 +342,8 @@ func (s *Service) FollowUp(ctx context.Context, scope *access.ProjectScope, ref 
 // requireOverrides lets only staff who may edit those fields of a ticket
 // (the capability Update needs) set a group, request type or tags while
 // creating a follow-up or a copy; requester tokens get 403 staffOnly.
-func requireOverrides(scope *access.ProjectScope, group, requestType *string, tags bool) error {
-	if group == nil && requestType == nil && !tags {
+func requireOverrides(scope *access.ProjectScope, group *string, requestType, tags bool) error {
+	if group == nil && !requestType && !tags {
 		return nil
 	}
 	if !scope.Principal.IsStaff() {

@@ -1103,7 +1103,7 @@ export interface paths {
         };
         /**
          * Request types
-         * @description By `order`. Integrations map their categories by `code`, which never changes, and send the `id` as `requestTypeId`. `inUse` (tickets carrying the type) is reported to admins; 0 for everyone else.
+         * @description By `order`. Integrations map their categories by `code`, which never changes, and send it as `requestTypeCode` (or the `id` as `requestTypeId`). `inUse` (tickets carrying the type) is reported to admins; 0 for everyone else.
          *
          *     **Permission:** Admins and agents. Integrations: any scope.
          */
@@ -2435,6 +2435,8 @@ export interface components {
             includeAttachments?: boolean | null;
             /** @description Defaults to the original's priority. */
             priority?: number | null;
+            /** @description Alternative to requestTypeId (not both: 422 notAllowed). The type's stable code; no such type is 422 notFound, an inactive one 422 inactive. */
+            requestTypeCode?: string | null;
             /** @description Defaults to the original's request type (the default type when that one is inactive). An inactive type is refused. */
             requestTypeId?: string | null;
             /** @description Defaults to the original's subject. */
@@ -2478,6 +2480,8 @@ export interface components {
             /** @description Optional: the organisation (from POST /organisations) this ticket belongs to. Set explicitly; it is not taken from the requester. */
             organisationId?: string | null;
             priority?: number | null;
+            /** @description Alternative to requestTypeId (not both: 422 notAllowed). The type's stable code; no such type is 422 notFound, an inactive one 422 inactive. */
+            requestTypeCode?: string | null;
             /** @description An active request type; defaults to the first active one. An inactive type is 422 (inactive). */
             requestTypeId?: string | null;
             /** @description An existing contactId, or name and email (plus optional externalId) to find or create the contact. */
@@ -2587,6 +2591,8 @@ export interface components {
             /** @description Defaults to the original's group (Triage when inactive). */
             groupId?: string | null;
             priority?: number | null;
+            /** @description Alternative to requestTypeId (not both: 422 notAllowed). The type's stable code; no such type is 422 notFound, an inactive one 422 inactive. */
+            requestTypeCode?: string | null;
             /** @description Defaults to the original's request type (the default type when that one is inactive). An inactive type is refused. */
             requestTypeId?: string | null;
             /** @description Defaults to the original ticket's subject. */
@@ -2883,6 +2889,8 @@ export interface components {
             /** @description Staff only. Links the ticket to an organisation; an empty string clears it. Signed-in users get 403 organisationManagedByIntegration when the ticket was created through the API or MCP; only integration credentials may change it. */
             organisationId?: string | null;
             priority?: number | null;
+            /** @description Alternative to requestTypeId (not both: 422 notAllowed). The type's stable code; no such type is 422 notFound, an inactive one 422 inactive; a ticket that already carries that type keeps it. */
+            requestTypeCode?: string | null;
             /** @description An active request type. A ticket that already carries an inactive type keeps it. */
             requestTypeId?: string | null;
             subject?: string | null;
@@ -9187,9 +9195,11 @@ export interface operations {
                 tag?: string;
                 /** @description Comma-separated request type IDs. */
                 requestTypeId?: string;
+                /** @description Comma-separated request type codes, an alternative to `requestTypeId` (both: `422 notAllowed`). Inactive types are included; a code no type has matches nothing. */
+                requestTypeCode?: string;
                 /** @description Comma-separated organisation IDs (also for requester-side tokens). */
                 organisationId?: string;
-                /** @description A contact ID: only that contact's tickets (also for requester-side tokens). `assignee`, `priority`, `tag`, `requestTypeId` and `due` are staff only (`403 userRequired` for requester-side tokens). */
+                /** @description A contact ID: only that contact's tickets (also for requester-side tokens). `assignee`, `priority`, `tag`, `requestTypeId`, `requestTypeCode` and `due` are staff only (`403 userRequired` for requester-side tokens). */
                 requesterId?: string;
                 /** @description SLA filter: `dueSoon` (warning time passed, not yet past due), `breached` (running past its deadline), `met` (first response in time), `missed` (first response after the deadline) or `running` (within time). */
                 due?: "dueSoon" | "breached" | "met" | "missed" | "running";

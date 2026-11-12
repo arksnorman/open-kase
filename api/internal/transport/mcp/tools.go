@@ -14,6 +14,7 @@ import (
 	"github.com/arksnorman/open-kase/api/internal/macros"
 	"github.com/arksnorman/open-kase/api/internal/organisations"
 	"github.com/arksnorman/open-kase/api/internal/projects"
+	"github.com/arksnorman/open-kase/api/internal/requesttypes"
 	"github.com/arksnorman/open-kase/api/internal/statuses"
 	"github.com/arksnorman/open-kase/api/internal/tickets"
 	transporthttp "github.com/arksnorman/open-kase/api/internal/transport/http"
@@ -53,6 +54,7 @@ const (
 	ToolOrganisationsCreate = "organisationsCreate"
 	ToolOrganisationsUpdate = "organisationsUpdate"
 	ToolOrganisationsDelete = "organisationsDelete"
+	ToolRequestTypesList    = "requestTypesList"
 	ToolHoldReasonsList     = "holdReasonsList"
 	ToolHoldReasonsCreate   = "holdReasonsCreate"
 	ToolHoldReasonsUpdate   = "holdReasonsUpdate"
@@ -137,17 +139,18 @@ type mutationArgs struct {
 // ---- Inputs ----
 
 type ticketsListIn struct {
-	View           string `json:"view,omitempty" jsonschema:"Queue/view. Users: myWork, unassigned, watching, awaitingCustomer, onHold, dueSoon, resolved, archived, all. API tokens: awaitingCustomer, onHold, resolved, archived, all."`
-	Q              string `json:"q,omitempty" jsonschema:"Search text: a ticket number (1042 or #1042) or words from the subject."`
-	GroupId        string `json:"groupId,omitempty" jsonschema:"Only tickets currently in this group."`
-	StatusId       string `json:"statusId,omitempty" jsonschema:"Comma-separated status IDs (also for requester-side tokens)."`
-	OrganisationId string `json:"organisationId,omitempty" jsonschema:"Comma-separated organisation IDs (also for requester-side tokens)."`
-	RequesterId    string `json:"requesterId,omitempty" jsonschema:"A contact ID: only that contact's tickets (also for requester-side tokens)."`
-	Assignee       string `json:"assignee,omitempty" jsonschema:"Users and staff tokens: me, unassigned or a user ID. Requester-side tokens: 403 userRequired."`
-	Priority       string `json:"priority,omitempty" jsonschema:"Users and staff tokens: comma-separated priorities 1-4."`
-	Tag            string `json:"tag,omitempty" jsonschema:"Users and staff tokens: comma-separated catalog tags."`
-	RequestTypeId  string `json:"requestTypeId,omitempty" jsonschema:"Users and staff tokens: comma-separated request type IDs."`
-	Due            string `json:"due,omitempty" jsonschema:"Users and staff tokens: SLA filter: dueSoon, breached, met, missed or running."`
+	View            string `json:"view,omitempty" jsonschema:"Queue/view. Users: myWork, unassigned, watching, awaitingCustomer, onHold, dueSoon, resolved, archived, all. API tokens: awaitingCustomer, onHold, resolved, archived, all."`
+	Q               string `json:"q,omitempty" jsonschema:"Search text: a ticket number (1042 or #1042) or words from the subject."`
+	GroupId         string `json:"groupId,omitempty" jsonschema:"Only tickets currently in this group."`
+	StatusId        string `json:"statusId,omitempty" jsonschema:"Comma-separated status IDs (also for requester-side tokens)."`
+	OrganisationId  string `json:"organisationId,omitempty" jsonschema:"Comma-separated organisation IDs (also for requester-side tokens)."`
+	RequesterId     string `json:"requesterId,omitempty" jsonschema:"A contact ID: only that contact's tickets (also for requester-side tokens)."`
+	Assignee        string `json:"assignee,omitempty" jsonschema:"Users and staff tokens: me, unassigned or a user ID. Requester-side tokens: 403 userRequired."`
+	Priority        string `json:"priority,omitempty" jsonschema:"Users and staff tokens: comma-separated priorities 1-4."`
+	Tag             string `json:"tag,omitempty" jsonschema:"Users and staff tokens: comma-separated catalog tags."`
+	RequestTypeId   string `json:"requestTypeId,omitempty" jsonschema:"Users and staff tokens: comma-separated request type IDs (or use requestTypeCode, not both)."`
+	RequestTypeCode string `json:"requestTypeCode,omitempty" jsonschema:"Users and staff tokens: comma-separated request type codes (requestTypesList), an alternative to requestTypeId. Inactive types are included."`
+	Due             string `json:"due,omitempty" jsonschema:"Users and staff tokens: SLA filter: dueSoon, breached, met, missed or running."`
 	pageArgs
 }
 
@@ -172,28 +175,30 @@ type requesterIn struct {
 }
 
 type ticketsCreateIn struct {
-	Subject        string      `json:"subject" jsonschema:"Ticket subject."`
-	Body           string      `json:"body" jsonschema:"First public message (Markdown; visible to the requester)."`
-	Requester      requesterIn `json:"requester" jsonschema:"The requester contact."`
-	Priority       int         `json:"priority,omitempty" jsonschema:"1 (critical) to 4 (low). From a requester-side token it is stored as the requested priority."`
-	RequestTypeId  string      `json:"requestTypeId,omitempty" jsonschema:"Request type ID of an active type (default: the first active request type)."`
-	GroupId        string      `json:"groupId,omitempty" jsonschema:"Initial group ID (default: the project's triage group)."`
-	OrganisationId string      `json:"organisationId,omitempty" jsonschema:"Optional: the organisation this ticket belongs to (organisationsCreate / organisationsList). Set explicitly; it is not taken from the requester."`
-	CCEmails       []string    `json:"ccEmails,omitempty" jsonschema:"Optional: up to 10 email addresses copied on every email to the requester (not the requester's own address)."`
-	IdempotencyKey string      `json:"idempotencyKey,omitempty" jsonschema:"Optional key (1-200 printable ASCII); a retry with the same key and arguments returns the first ticket."`
+	Subject         string      `json:"subject" jsonschema:"Ticket subject."`
+	Body            string      `json:"body" jsonschema:"First public message (Markdown; visible to the requester)."`
+	Requester       requesterIn `json:"requester" jsonschema:"The requester contact."`
+	Priority        int         `json:"priority,omitempty" jsonschema:"1 (critical) to 4 (low). From a requester-side token it is stored as the requested priority."`
+	RequestTypeId   string      `json:"requestTypeId,omitempty" jsonschema:"Request type ID of an active type (default: the first active request type). Or send requestTypeCode, not both."`
+	RequestTypeCode string      `json:"requestTypeCode,omitempty" jsonschema:"Code of an active request type (requestTypesList), the alternative to requestTypeId."`
+	GroupId         string      `json:"groupId,omitempty" jsonschema:"Initial group ID (default: the project's triage group)."`
+	OrganisationId  string      `json:"organisationId,omitempty" jsonschema:"Optional: the organisation this ticket belongs to (organisationsCreate / organisationsList). Set explicitly; it is not taken from the requester."`
+	CCEmails        []string    `json:"ccEmails,omitempty" jsonschema:"Optional: up to 10 email addresses copied on every email to the requester (not the requester's own address)."`
+	IdempotencyKey  string      `json:"idempotencyKey,omitempty" jsonschema:"Optional key (1-200 printable ASCII); a retry with the same key and arguments returns the first ticket."`
 }
 
 type ticketsFollowUpIn struct {
 	ticketRef
-	Subject        string   `json:"subject,omitempty" jsonschema:"Defaults to the original ticket's subject."`
-	Body           string   `json:"body,omitempty" jsonschema:"First public message (Markdown); defaults to \"Follow-up to #<number>.\""`
-	Priority       int      `json:"priority,omitempty" jsonschema:"1 (critical) to 4 (low)."`
-	AddSignature   *bool    `json:"addSignature,omitempty" jsonschema:"Signed-in users only (default true): false skips the signatures on the first message."`
-	GroupId        string   `json:"groupId,omitempty" jsonschema:"Defaults to the original's group."`
-	RequestTypeId  string   `json:"requestTypeId,omitempty" jsonschema:"Defaults to the original's request type, or to the first active type when that one is inactive."`
-	Tags           []string `json:"tags,omitempty" jsonschema:"Catalog tags for the follow-up (none by default)."`
-	ContactId      string   `json:"contactId,omitempty" jsonschema:"Only when the first message is written as the requester (a token with neither tickets:comment nor tickets:all): open the follow-up as this contact of the original's organisation (422 contactNotInOrganisation otherwise): they become the requester of the new ticket and author its first message. Otherwise 422 notAllowed."`
-	IdempotencyKey string   `json:"idempotencyKey,omitempty" jsonschema:"Optional key (1-200 printable ASCII); a retry with the same key and arguments returns the first ticket."`
+	Subject         string   `json:"subject,omitempty" jsonschema:"Defaults to the original ticket's subject."`
+	Body            string   `json:"body,omitempty" jsonschema:"First public message (Markdown); defaults to \"Follow-up to #<number>.\""`
+	Priority        int      `json:"priority,omitempty" jsonschema:"1 (critical) to 4 (low)."`
+	AddSignature    *bool    `json:"addSignature,omitempty" jsonschema:"Signed-in users only (default true): false skips the signatures on the first message."`
+	GroupId         string   `json:"groupId,omitempty" jsonschema:"Defaults to the original's group."`
+	RequestTypeId   string   `json:"requestTypeId,omitempty" jsonschema:"Defaults to the original's request type, or to the first active type when that one is inactive. Or send requestTypeCode, not both."`
+	RequestTypeCode string   `json:"requestTypeCode,omitempty" jsonschema:"Code of an active request type (requestTypesList), the alternative to requestTypeId."`
+	Tags            []string `json:"tags,omitempty" jsonschema:"Catalog tags for the follow-up (none by default)."`
+	ContactId       string   `json:"contactId,omitempty" jsonschema:"Only when the first message is written as the requester (a token with neither tickets:comment nor tickets:all): open the follow-up as this contact of the original's organisation (422 contactNotInOrganisation otherwise): they become the requester of the new ticket and author its first message. Otherwise 422 notAllowed."`
+	IdempotencyKey  string   `json:"idempotencyKey,omitempty" jsonschema:"Optional key (1-200 printable ASCII); a retry with the same key and arguments returns the first ticket."`
 }
 
 type ticketsCopyIn struct {
@@ -201,7 +206,8 @@ type ticketsCopyIn struct {
 	Subject            string    `json:"subject,omitempty" jsonschema:"Defaults to the original's subject."`
 	GroupId            string    `json:"groupId,omitempty" jsonschema:"Defaults to the original's group."`
 	Priority           int       `json:"priority,omitempty" jsonschema:"1 (critical) to 4 (low); defaults to the original's."`
-	RequestTypeId      string    `json:"requestTypeId,omitempty" jsonschema:"Defaults to the original's request type, or to the first active type when that one is inactive."`
+	RequestTypeId      string    `json:"requestTypeId,omitempty" jsonschema:"Defaults to the original's request type, or to the first active type when that one is inactive. Or send requestTypeCode, not both."`
+	RequestTypeCode    string    `json:"requestTypeCode,omitempty" jsonschema:"Code of an active request type (requestTypesList), the alternative to requestTypeId."`
 	Tags               *[]string `json:"tags,omitempty" jsonschema:"Catalog tags; defaults to the original's tags that still exist."`
 	Body               string    `json:"body,omitempty" jsonschema:"First public message (Markdown); defaults to the original's first public message."`
 	IncludeAttachments *bool     `json:"includeAttachments,omitempty" jsonschema:"Copy the first message's attachments (default true)."`
@@ -235,12 +241,13 @@ type ticketsAddNoteIn struct {
 
 type ticketsUpdateIn struct {
 	ticketRef
-	Priority       int       `json:"priority,omitempty" jsonschema:"1 (critical), 2 (high), 3 (normal) or 4 (low)."`
-	Tags           *[]string `json:"tags,omitempty" jsonschema:"Replaces the ticket's tag set (an empty list removes every tag). Added tags must exist in the catalog (tagsList); unknown ones are rejected with unknownTag."`
-	RequestTypeId  string    `json:"requestTypeId,omitempty" jsonschema:"Request type ID of an active type; an inactive type is refused."`
-	Subject        string    `json:"subject,omitempty" jsonschema:"New subject: only a requester-side token, on a ticket it created; staff receive subjectLocked."`
-	OrganisationId *string   `json:"organisationId,omitempty" jsonschema:"Staff only: the ticket's organisation ID (an empty string clears it). Allowed for tokens on any ticket; signed-in users cannot change it on API-created tickets."`
-	CCEmails       *[]string `json:"ccEmails,omitempty" jsonschema:"Staff only: replaces the CC addresses copied on requester emails (up to 10; an empty list clears them)."`
+	Priority        int       `json:"priority,omitempty" jsonschema:"1 (critical), 2 (high), 3 (normal) or 4 (low)."`
+	Tags            *[]string `json:"tags,omitempty" jsonschema:"Replaces the ticket's tag set (an empty list removes every tag). Added tags must exist in the catalog (tagsList); unknown ones are rejected with unknownTag."`
+	RequestTypeId   string    `json:"requestTypeId,omitempty" jsonschema:"Request type ID of an active type; an inactive type is refused. Or send requestTypeCode, not both."`
+	RequestTypeCode string    `json:"requestTypeCode,omitempty" jsonschema:"Code of an active request type (requestTypesList), the alternative to requestTypeId."`
+	Subject         string    `json:"subject,omitempty" jsonschema:"New subject: only a requester-side token, on a ticket it created; staff receive subjectLocked."`
+	OrganisationId  *string   `json:"organisationId,omitempty" jsonschema:"Staff only: the ticket's organisation ID (an empty string clears it). Allowed for tokens on any ticket; signed-in users cannot change it on API-created tickets."`
+	CCEmails        *[]string `json:"ccEmails,omitempty" jsonschema:"Staff only: replaces the CC addresses copied on requester emails (up to 10; an empty list clears them)."`
 	mutationArgs
 }
 
@@ -426,6 +433,8 @@ func (h *Handler) registerTools() {
 	addTool(h, &sdk.Tool{Name: ToolOrganisationsDelete, Description: "Delete an organisation (admins; tokens with organisations:write). Refused with organisationInUse while any contact or ticket references it: deactivate it instead (organisationsUpdate active false).",
 		Annotations: destructive("Delete organisation")}, nil, h.organisationsDelete)
 
+	addTool(h, &sdk.Tool{Name: ToolRequestTypesList, Description: "List the request types with their stable code (users and any token). Send a code as requestTypeCode (or an ID as requestTypeId) to ticketsCreate, ticketsUpdate, ticketsFollowUp, ticketsCopy and ticketsList.",
+		Annotations: readOnly("List request types")}, nil, h.requestTypesList)
 	addTool(h, &sdk.Tool{Name: ToolHoldReasonsList, Description: "List the hold reasons (ID, name, maxDays) a ticket can be put on hold for with ticketsTransition hold (users; tokens with holdReasons:read or holdReasons:write; staff tokens with tickets:read). inUse is reported to callers who manage hold reasons.",
 		Annotations: readOnly("List hold reasons")}, nil, h.holdReasonsList)
 	addTool(h, &sdk.Tool{Name: ToolHoldReasonsCreate, Description: "Create a hold reason (admins; tokens with holdReasons:write). Fails with holdReasonExists when the name is taken.",
@@ -455,7 +464,7 @@ func (h *Handler) list(ctx context.Context, c *call, in tickets.ListInput, pg pa
 
 func (h *Handler) ticketsList(ctx context.Context, c *call, in ticketsListIn) (any, error) {
 	params := map[string]string{"statusId": in.StatusId, "organisationId": in.OrganisationId, "requesterId": in.RequesterId,
-		"assignee": in.Assignee, "priority": in.Priority, "tag": in.Tag, "requestTypeId": in.RequestTypeId, "due": in.Due}
+		"assignee": in.Assignee, "priority": in.Priority, "tag": in.Tag, "requestTypeId": in.RequestTypeId, "requestTypeCode": in.RequestTypeCode, "due": in.Due}
 	li := tickets.ListInput{View: in.View, Q: in.Q, GroupId: in.GroupId, Filter: transporthttp.ListFilter(func(name string) string { return params[name] })}
 	return h.list(ctx, c, li, in.pageArgs)
 }
@@ -565,7 +574,7 @@ func (h *Handler) ticketsCreate(ctx context.Context, c *call, in ticketsCreateIn
 			prio = &in.Priority
 		}
 		t, err := h.d.Tickets.Create(ctx, s, tickets.CreateInput{
-			Subject: in.Subject, Body: in.Body, Priority: prio, RequestTypeId: optional(in.RequestTypeId), GroupId: optional(in.GroupId),
+			Subject: in.Subject, Body: in.Body, Priority: prio, RequestTypeId: optional(in.RequestTypeId), RequestTypeCode: optional(in.RequestTypeCode), GroupId: optional(in.GroupId),
 			Requester: tickets.RequesterInput{ContactId: optional(in.Requester.ContactId), Name: optional(in.Requester.Name),
 				Email: optional(in.Requester.Email), ExternalId: optional(in.Requester.ExternalId),
 				OrganisationId: optional(in.Requester.OrganisationId)},
@@ -590,7 +599,7 @@ func (h *Handler) ticketsFollowUp(ctx context.Context, c *call, in ticketsFollow
 			prio = &in.Priority
 		}
 		out, err := h.d.Tickets.FollowUp(ctx, s, t.Id, tickets.FollowUpInput{Subject: optional(in.Subject), Body: optional(in.Body), Priority: prio,
-			GroupId: optional(in.GroupId), RequestTypeId: optional(in.RequestTypeId), Tags: in.Tags,
+			GroupId: optional(in.GroupId), RequestTypeId: optional(in.RequestTypeId), RequestTypeCode: optional(in.RequestTypeCode), Tags: in.Tags,
 			NoSignature: in.AddSignature != nil && !*in.AddSignature, ContactId: in.ContactId})
 		if err != nil {
 			return nil, err
@@ -611,7 +620,7 @@ func (h *Handler) ticketsCopy(ctx context.Context, c *call, in ticketsCopyIn) (a
 			prio = &in.Priority
 		}
 		out, err := h.d.Tickets.Copy(ctx, s, t.Id, tickets.CopyInput{Subject: optional(in.Subject), GroupId: optional(in.GroupId), Priority: prio,
-			RequestTypeId: optional(in.RequestTypeId), Tags: in.Tags, Body: optional(in.Body), IncludeAttachments: in.IncludeAttachments})
+			RequestTypeId: optional(in.RequestTypeId), RequestTypeCode: optional(in.RequestTypeCode), Tags: in.Tags, Body: optional(in.Body), IncludeAttachments: in.IncludeAttachments})
 		if err != nil {
 			return nil, err
 		}
@@ -677,7 +686,7 @@ func (h *Handler) ticketsUpdate(ctx context.Context, c *call, in ticketsUpdateIn
 		return nil, err
 	}
 	return h.idempotent(ctx, c, ToolTicketsUpdate, in.IdempotencyKey, in, h.recheckTicket(c, in.Ticket), func(ctx context.Context) (any, error) {
-		up := tickets.UpdateInput{Subject: optional(in.Subject), RequestTypeId: optional(in.RequestTypeId), Tags: in.Tags,
+		up := tickets.UpdateInput{Subject: optional(in.Subject), RequestTypeId: optional(in.RequestTypeId), RequestTypeCode: optional(in.RequestTypeCode), Tags: in.Tags,
 			OrganisationId: in.OrganisationId, CCEmails: in.CCEmails}
 		if in.Priority != 0 {
 			prio := in.Priority
@@ -847,6 +856,22 @@ func (h *Handler) tagsDelete(ctx context.Context, c *call, in tagNameIn) (any, e
 		return nil, err
 	}
 	return map[string]any{"deleted": tickets.NormalizeTag(in.Name), "tickets": n}, nil
+}
+
+type requestTypesListIn struct {
+	Active string `json:"active,omitempty" jsonschema:"true (default), false or all."`
+}
+
+func (h *Handler) requestTypesList(ctx context.Context, c *call, in requestTypesListIn) (any, error) {
+	s, err := h.scope(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := h.d.RequestTypes.List(ctx, s, in.Active)
+	if err != nil {
+		return nil, err
+	}
+	return itemsOf(rows, func(t requesttypes.Type) any { return transporthttp.RequestTypeView(t) }), nil
 }
 
 func (h *Handler) holdReasonsList(ctx context.Context, c *call, _ noArgs) (any, error) {

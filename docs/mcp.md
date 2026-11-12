@@ -63,6 +63,7 @@ A missing scope answers `insufficientScope`, a user-only tool `userRequired`, ex
 | `tagsList` | `GET /tags` | `tags:read` or `tags:write` (counts 0) | `tickets:read`, `tags:read` or `tags:write` | admins and agents |
 | `tagsCreate` | `POST /tags` | `tags:write` | `tags:write` | admins |
 | `tagsDelete` | `DELETE /tags/{name}` | `tags:write` | `tags:write` | admins |
+| `requestTypesList` | `GET /request-types` | any scope | any scope | admins and agents |
 | `holdReasonsList` | `GET /hold-reasons` | `holdReasons:read` or `holdReasons:write` | `tickets:read`, `holdReasons:read` or `holdReasons:write` | admins and agents |
 | `holdReasonsCreate` | `POST /hold-reasons` | `holdReasons:write` | `holdReasons:write` | admins |
 | `holdReasonsUpdate` | `PATCH /hold-reasons/{h}` | `holdReasons:write` | `holdReasons:write` | admins |
@@ -122,16 +123,16 @@ Common arguments:
 
 | Tool | Annotations | Arguments | Result |
 | --- | --- | --- | --- |
-| `ticketsList` | read-only | `view?` (`myWork`, `unassigned`, `watching`, `awaitingCustomer`, `onHold`, `dueSoon`, `resolved`, `archived`, `all`; user-only views are refused for tokens), `q?`, `groupId?`, `statusId?`, `organisationId?` (comma-separated IDs), `requesterId?` (a contact ID), `assignee?` (`me`, `unassigned` or a user ID), `priority?` (comma-separated 1-4), `tag?`, `requestTypeId?` (comma-separated), `due?` (`dueSoon`, `breached`, `met`, `missed`, `running`), `cursor?`, `limit?` | `{ items: Ticket[], nextCursor }`. `assignee`, `priority`, `tag`, `requestTypeId` and `due` are the same filters as `GET /tickets` and are refused for requester-side tokens (`userRequired`) |
+| `ticketsList` | read-only | `view?` (`myWork`, `unassigned`, `watching`, `awaitingCustomer`, `onHold`, `dueSoon`, `resolved`, `archived`, `all`; user-only views are refused for tokens), `q?`, `groupId?`, `statusId?`, `organisationId?` (comma-separated IDs), `requesterId?` (a contact ID), `assignee?` (`me`, `unassigned` or a user ID), `priority?` (comma-separated 1-4), `tag?`, `requestTypeId?` (comma-separated), `requestTypeCode?` (comma-separated codes, not together with `requestTypeId`), `due?` (`dueSoon`, `breached`, `met`, `missed`, `running`), `cursor?`, `limit?` | `{ items: Ticket[], nextCursor }`. `assignee`, `priority`, `tag`, `requestTypeId`, `requestTypeCode` and `due` are the same filters as `GET /tickets` and are refused for requester-side tokens (`userRequired`) |
 | `ticketsSearch` | read-only | `query` (search words, phrases in quotes, `-word` exclusions, or a ticket number; ≤ 100 chars), `cursor?`, `limit?` | `{ items: SearchHit[], nextCursor, total, totalCapped, exactMatch: Ticket \| null }` — the REST `/search` engine: subjects and the messages the caller may read, plain-text snippets with UTF-16 highlight ranges; `exactMatch` is the ticket named by a number (`42` or `#42`) |
 | `ticketsGet` | read-only | `ticket`, `includeMessages?` (default true), `messagesCursor?`, `messagesLimit?` | `{ ticket: Ticket, messages?: { items: Message[], nextCursor } }` |
-| `ticketsCreate` | not destructive | `subject`, `body`, `requester` `{ contactId }` or `{ name, email, externalId? }`, `priority?` (1–4), `requestTypeId?`, `groupId?`, `organisationId?`, `ccEmails?`, `idempotencyKey?` | `Ticket` (unassigned, in the group or Triage). From a requester-side token, `priority` is stored as `requestedPriority` |
-| `ticketsCopy` | not destructive | `ticket`, `subject?`, `groupId?`, `priority?`, `requestTypeId?`, `tags?`, `body?`, `includeAttachments?`, `idempotencyKey?` | `Ticket` linked `copiedFrom` the original (also for archived tickets) |
-| `ticketsFollowUp` | not destructive | `ticket`, `subject?`, `body?`, `priority?`, `groupId?`, `requestTypeId?`, `tags?`, `addSignature?`, `contactId?` (open it as another contact of the original's organisation, who becomes the new ticket's requester and author of its first message; only when it is written as the requester), `idempotencyKey?` | `Ticket` linked `followUpTo` the original (also for archived tickets) |
+| `ticketsCreate` | not destructive | `subject`, `body`, `requester` `{ contactId }` or `{ name, email, externalId? }`, `priority?` (1–4), `requestTypeId?` or `requestTypeCode?`, `groupId?`, `organisationId?`, `ccEmails?`, `idempotencyKey?` | `Ticket` (unassigned, in the group or Triage). From a requester-side token, `priority` is stored as `requestedPriority` |
+| `ticketsCopy` | not destructive | `ticket`, `subject?`, `groupId?`, `priority?`, `requestTypeId?` or `requestTypeCode?`, `tags?`, `body?`, `includeAttachments?`, `idempotencyKey?` | `Ticket` linked `copiedFrom` the original (also for archived tickets) |
+| `ticketsFollowUp` | not destructive | `ticket`, `subject?`, `body?`, `priority?`, `groupId?`, `requestTypeId?` or `requestTypeCode?`, `tags?`, `addSignature?`, `contactId?` (open it as another contact of the original's organisation, who becomes the new ticket's requester and author of its first message; only when it is written as the requester), `idempotencyKey?` | `Ticket` linked `followUpTo` the original (also for archived tickets) |
 | `ticketsClaim` | not destructive | `ticket`, `expectedVersion?`, `idempotencyKey?` | `Ticket`; one concurrent claim wins, others get `ticketAlreadyClaimed` |
 | `ticketsReply` | not destructive | `ticket`, **`audience: "public"`** (required), `body`, `expectedLastPublicId?`, `thenStatusId?`, `addSignature?` (users only), `as?` (`staff` \| `requester`; default staff with `tickets:comment`, otherwise requester), `contactId?` (with `as: requester` only: author the reply as another contact of the ticket's organisation; `contactNotInOrganisation` otherwise), `expectedVersion?`, `idempotencyKey?` | `{ message: Message, ticket: Ticket }`; `newerReplyExists` when another public message arrived after `expectedLastPublicId`; `thenStatusId` changes the status atomically with the message (users, staff tokens with `tickets:write`) |
 | `ticketsAddNote` | not destructive | `ticket`, **`audience: "agent"`** (required), `body`, `thenStatusId?`, `expectedVersion?`, `idempotencyKey?` | `{ message: Message, ticket: Ticket }` |
-| `ticketsUpdate` | not destructive, idempotent | `ticket`, `priority?` (1 critical … 4 low), `tags?` (replaces the set; added tags must be in `tagsList`), `requestTypeId?`, `subject?` (requester-side token, own tickets), `organisationId?`, `ccEmails?`, `expectedVersion?`, `idempotencyKey?` | `Ticket` |
+| `ticketsUpdate` | not destructive, idempotent | `ticket`, `priority?` (1 critical … 4 low), `tags?` (replaces the set; added tags must be in `tagsList`), `requestTypeId?` or `requestTypeCode?`, `subject?` (requester-side token, own tickets), `organisationId?`, `ccEmails?`, `expectedVersion?`, `idempotencyKey?` | `Ticket` |
 | `ticketsTransition` | not destructive | `ticket`, `action` (`resolve`, `reopen`, `archive`, `hold`, `setStatus`), `statusId?` (only with `setStatus`; IDs from `statusesList`), `holdReasonId?` (required with `hold`; IDs from `holdReasonsList`; the ticket returns to Open after the reason's days), `note?` (with `hold`: an internal note), `reason?`, `contactId?` (requester-side `resolve` only: the contact of the ticket's organisation who resolved it), `expectedVersion?`, `idempotencyKey?` | `Ticket`; archived tickets are final (`ticketArchived`). A requester-side `resolve` of an already Resolved ticket returns it unchanged |
 | `ticketsAssign` | not destructive, idempotent | `ticket`, `groupId` (the current group to change only the assignee), `assigneeId?` or `unassign?`, `expectedVersion?`, `idempotencyKey?` | `Ticket`; without `assigneeId` an assignee who is a member of the target group is kept, otherwise cleared; an ineligible assignee is `validationFailed` (`assigneeId notEligible`) |
 | `groupsList` | read-only | `cursor?`, `limit?` | `{ items: Group[], nextCursor }` |
@@ -142,6 +143,7 @@ Common arguments:
 | `contactsUpsert` | not destructive, idempotent | `name`, `email`, `externalId?`, `organisationId?` (omitted: unchanged; empty: clears) | `{ contact: Contact, created: boolean }` (an existing contact with the email is updated) |
 | `cannedRepliesList` | read-only | — | `{ items: Macro[] }` |
 | `tagsList` | read-only | — | `{ items: Tag[] }` — the admin-managed catalog; only these tags can be added with `ticketsUpdate` (`unknownTag` otherwise) |
+| `requestTypesList` | read-only | `active?` (`true` default, `false` or `all`) | `{ items: RequestType[] }` — id, `code`, name, order, active, `inUse` (admins only; 0 otherwise) |
 | `holdReasonsList` | read-only | — | `{ items: HoldReason[] }` — id, name, `maxDays` (the hold length), `inUse` (admins and `holdReasons:write` only) |
 | `holdReasonsCreate` | not destructive | `name`, `maxDays` (1–365) | `HoldReason`; `holdReasonExists` when the name is taken |
 | `holdReasonsUpdate` | not destructive | `holdReasonId`, `name?`, `maxDays?`, `expectedVersion?` | `HoldReason`; a new `maxDays` affects only later holds |
@@ -152,10 +154,12 @@ Common arguments:
 | `organisationsUpdate` | not destructive | `organisationId`, `name?`, `externalRef?` (empty clears), `active?` (false deactivates), `expectedVersion?` | `Organisation` |
 | `organisationsDelete` | destructive | `organisationId`, `expectedVersion?` | `{ deleted }`; `organisationInUse` while a contact or ticket references it |
 
-Ticket results carry `requestType` `{ id, code, name }`; integrations map by `code`, which never changes. There are no
-request type tools: managing them is for admins in the web app, and the list (`GET /request-types`) is REST only.
-`requestTypeId` must name an active type (otherwise `validationFailed` on `requestTypeId`); without it a new ticket gets
-the first active request type.
+Ticket results carry `requestType` `{ id, code, name }`; integrations map by `code`, which never changes.
+`requestTypesList` (read-only, open to users and any token) lists the types with their `code`. Send a code as
+`requestTypeCode` (or an ID as `requestTypeId`, not both) to `ticketsCreate`, `ticketsUpdate`, `ticketsFollowUp` and
+`ticketsCopy`, and as `requestTypeCode` to filter `ticketsList`. The type must be active (otherwise `validationFailed` on
+the field you sent: `inactive` or `notFound`); without either field a new ticket gets the first active request type.
+There are no tools to manage request types: that is for admins in the web app and the REST API.
 
 Scheduled sending, watchers and links are not available through MCP (REST only, signed-in users).
 

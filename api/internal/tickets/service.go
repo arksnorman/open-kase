@@ -297,8 +297,10 @@ type CreateInput struct {
 	Requester     RequesterInput
 	Priority      *int
 	RequestTypeId *string
-	GroupId       *string
-	AttachmentIds []string
+	// RequestTypeCode is the alternative to RequestTypeId; sending both is refused.
+	RequestTypeCode *string
+	GroupId         *string
+	AttachmentIds   []string
 	// OrganisationId is the organisation the creator links the ticket to
 	// (optional; explicit, never inferred from the requester).
 	OrganisationId *string
@@ -339,9 +341,7 @@ func (in CreateInput) validate(s *Service) error {
 	if in.Priority != nil {
 		v.Int(validation.TicketPriority, "priority", int64(*in.Priority))
 	}
-	if in.RequestTypeId != nil {
-		v.String(validation.ObjectID, "requestTypeId", *in.RequestTypeId)
-	}
+	validateTypeRef(&v, in.RequestTypeId, in.RequestTypeCode)
 	if in.GroupId != nil {
 		v.String(validation.ObjectID, "groupId", *in.GroupId)
 	}
@@ -438,7 +438,7 @@ func (s *Service) create(ctx context.Context, scope *access.ProjectScope, in Cre
 		group = g
 	}
 
-	rt, err := s.requestType(ctx, scope, in.RequestTypeId)
+	rt, err := s.requestType(ctx, scope, in.RequestTypeId, in.RequestTypeCode)
 	if err != nil {
 		return Ticket{}, err
 	}
@@ -580,9 +580,9 @@ func (s *Service) create(ctx context.Context, scope *access.ProjectScope, in Cre
 		return Ticket{}, errGroupInactive()
 	case errors.Is(err, ErrRequestTypeInactive):
 		// Deactivated or deleted between the check above and the commit.
-		return Ticket{}, errRequestTypeInactive()
+		return Ticket{}, errRequestTypeInactive(in.RequestTypeCode != nil)
 	case errors.Is(err, ErrRequestTypeGone):
-		return Ticket{}, errRequestTypeNotFound()
+		return Ticket{}, errRequestTypeNotFound(in.RequestTypeCode != nil)
 	case errors.Is(err, ErrOrganisationInactive):
 		return Ticket{}, errOrganisationInactive()
 	case errors.Is(err, ErrOrganisationGone):
@@ -650,33 +650,74 @@ func (s *Service) checkOrganisation(ctx context.Context, scope *access.ProjectSc
 	return err
 }
 
+// validateTypeRef checks the request type named by ID or by code (not both).
+func validateTypeRef(v *validation.Collector, id, code *string) {
+	if id != nil {
+		v.String(validation.ObjectID, "requestTypeId", *id)
+	}
+	if code != nil {
+		v.String(validation.RequestTypeCode, "requestTypeCode", *code)
+	}
+	if id != nil && code != nil {
+		v.Add("requestTypeCode", "notAllowed", "Send requestTypeId or requestTypeCode, not both.")
+	}
+}
+
 // requestType resolves the request type of a new ticket or of a change: the
-// first active type when id is nil, otherwise the type with that ID, which
-// must exist and be active.
-func (s *Service) requestType(ctx context.Context, scope *access.ProjectScope, id *string) (requesttypes.Type, error) {
+// first active type when neither is given, otherwise the type with that ID or
+// code, which must exist and be active.
+func (s *Service) requestType(ctx context.Context, scope *access.ProjectScope, id, code *string) (requesttypes.Type, error) {
 	all, err := s.types.Types(ctx, scope.Principal.WorkspaceId, scope.Project.Id)
 	if err != nil {
 		return requesttypes.Type{}, err
 	}
+	byCode := code != nil
 	for _, rt := range all {
+		named := id == nil && code == nil
+		if id != nil {
+			named = rt.Id == *id
+		} else if code != nil {
+			named = rt.Code == *code
+		}
 		switch {
-		case id == nil && rt.Active:
-			return rt, nil
-		case id != nil && rt.Id == *id && !rt.Active:
-			return requesttypes.Type{}, errRequestTypeInactive()
-		case id != nil && rt.Id == *id:
+		case !named:
+		case !rt.Active && (id != nil || code != nil):
+			return requesttypes.Type{}, errRequestTypeInactive(byCode)
+		case rt.Active:
 			return rt, nil
 		}
 	}
-	return requesttypes.Type{}, errRequestTypeNotFound()
+	return requesttypes.Type{}, errRequestTypeNotFound(byCode)
 }
 
-func errRequestTypeNotFound() error {
+func errRequestTypeNotFound(byCode bool) error {
+	if byCode {
+		return fault.Field("requestTypeCode", "notFound", "No request type with this code exists in the project.")
+	}
 	return fault.Field("requestTypeId", "notFound", "No request type with this ID exists in the project.")
 }
 
-func errRequestTypeInactive() error {
+func errRequestTypeInactive(byCode bool) error {
+	if byCode {
+		return fault.Field("requestTypeCode", "inactive", "The request type is inactive.")
+	}
 	return fault.Field("requestTypeId", "inactive", "The request type is inactive.")
+}
+
+// typeIdsByCode returns the IDs of the request types (active or not) with
+// any of the codes; unknown codes match nothing.
+func (s *Service) typeIdsByCode(ctx context.Context, scope *access.ProjectScope, codes []string) ([]string, error) {
+	all, err := s.types.Types(ctx, scope.Principal.WorkspaceId, scope.Project.Id)
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for _, rt := range all {
+		if slices.Contains(codes, rt.Code) {
+			ids = append(ids, rt.Id)
+		}
+	}
+	return ids, nil
 }
 
 // copiedRequestType returns the ID of the original ticket's request type when
@@ -730,7 +771,7 @@ func parseSearch(q string) Search {
 
 // query builds an authorized query for a view. ok is false when the view
 // is known to be empty (no SLA data yet, or no groups).
-func (s *Service) query(scope *access.ProjectScope, in ListInput) (Query, bool, error) {
+func (s *Service) query(ctx context.Context, scope *access.ProjectScope, in ListInput) (Query, bool, error) {
 	acc, err := readAccess(scope)
 	if err != nil {
 		return Query{}, false, err
@@ -800,6 +841,16 @@ func (s *Service) query(scope *access.ProjectScope, in ListInput) (Query, bool, 
 		if err := v.Err(); err != nil {
 			return Query{}, false, err
 		}
+		if len(f.RequestTypeCodes) > 0 {
+			ids, err := s.typeIdsByCode(ctx, scope, f.RequestTypeCodes)
+			if err != nil {
+				return Query{}, false, err
+			}
+			if len(ids) == 0 {
+				return q, false, nil
+			}
+			f.RequestTypeIds = ids
+		}
 		f.apply(&q, me, s.clock.Now())
 		if q.None {
 			return q, false, nil
@@ -822,7 +873,7 @@ func workableCategories() []statuses.Category {
 // filters are part of the database query, so limits and cursors apply only
 // to tickets the caller may see.
 func (s *Service) List(ctx context.Context, scope *access.ProjectScope, in ListInput) (pagination.Page[Ticket], error) {
-	q, ok, err := s.query(scope, in)
+	q, ok, err := s.query(ctx, scope, in)
 	if err != nil || !ok {
 		return pagination.Page[Ticket]{Items: []Ticket{}}, err
 	}
@@ -853,7 +904,7 @@ func (s *Service) QueueCounts(ctx context.Context, scope *access.ProjectScope) (
 	}
 	var out QueueCounts
 	for view, dst := range map[string]*int64{"myWork": &out.MyWork, "unassigned": &out.Unassigned, "watching": &out.Watching, "awaitingCustomer": &out.AwaitingCustomer, "onHold": &out.OnHold, "dueSoon": &out.DueSoon} {
-		q, ok, err := s.query(scope, ListInput{View: view})
+		q, ok, err := s.query(ctx, scope, ListInput{View: view})
 		if err != nil {
 			return QueueCounts{}, err
 		}
@@ -885,6 +936,8 @@ type UpdateInput struct {
 	Subject       *string
 	Priority      *int
 	RequestTypeId *string
+	// RequestTypeCode is the alternative to RequestTypeId; sending both is refused.
+	RequestTypeCode *string
 	// Tags replaces the tag set (normalized); nil leaves it unchanged.
 	Tags *[]string
 	// OrganisationId sets the ticket's organisation (staff only; "" clears).
@@ -909,7 +962,7 @@ func errSubjectLocked() error {
 func (s *Service) Update(ctx context.Context, scope *access.ProjectScope, ref string, expectedVersion int64, in UpdateInput) (Ticket, error) {
 	integration := !scope.Principal.IsStaff()
 	if integration {
-		if in.Subject == nil || in.Priority != nil || in.RequestTypeId != nil || in.Tags != nil || in.OrganisationId != nil || in.CCEmails != nil {
+		if in.Subject == nil || in.Priority != nil || in.RequestTypeId != nil || in.RequestTypeCode != nil || in.Tags != nil || in.OrganisationId != nil || in.CCEmails != nil {
 			return Ticket{}, scope.Principal.RequireStaff()
 		}
 		if err := scope.Require(access.CapTicketCreate); err != nil {
@@ -928,9 +981,7 @@ func (s *Service) Update(ctx context.Context, scope *access.ProjectScope, ref st
 	if in.Priority != nil {
 		v.Int(validation.TicketPriority, "priority", int64(*in.Priority))
 	}
-	if in.RequestTypeId != nil {
-		v.String(validation.ObjectID, "requestTypeId", *in.RequestTypeId)
-	}
+	validateTypeRef(&v, in.RequestTypeId, in.RequestTypeCode)
 	validateOrg(&v, in.OrganisationId)
 	var tags []string
 	if in.Tags != nil {
@@ -992,8 +1043,8 @@ func (s *Service) Update(ctx context.Context, scope *access.ProjectScope, ref st
 		}
 		ch.OrganisationId, changed = in.OrganisationId, append(changed, "organisationId")
 	}
-	if in.RequestTypeId != nil && *in.RequestTypeId != t.RequestType.Id {
-		rt, err := s.requestType(ctx, scope, in.RequestTypeId)
+	if in.RequestTypeId != nil && *in.RequestTypeId != t.RequestType.Id || in.RequestTypeCode != nil && *in.RequestTypeCode != t.RequestType.Code {
+		rt, err := s.requestType(ctx, scope, in.RequestTypeId, in.RequestTypeCode)
 		if err != nil {
 			return Ticket{}, err
 		}
@@ -1017,7 +1068,16 @@ func (s *Service) Update(ctx context.Context, scope *access.ProjectScope, ref st
 		m.SLA = slaFor(func(in *sla.Instance) { in.ChangePriority(p, now) })
 	}
 	m.Changes = ch
-	return s.mutate(ctx, scope, m, nil)
+	out, err := s.mutate(ctx, scope, m, nil)
+	// The type was deactivated or deleted between the check above and the
+	// commit; report the field the caller sent.
+	switch {
+	case errors.Is(err, ErrRequestTypeInactive):
+		return Ticket{}, errRequestTypeInactive(in.RequestTypeCode != nil)
+	case errors.Is(err, ErrRequestTypeGone):
+		return Ticket{}, errRequestTypeNotFound(in.RequestTypeCode != nil)
+	}
+	return out, err
 }
 
 // mutate runs a mutation and maps precondition failures. classify, when
@@ -1055,10 +1115,6 @@ func (s *Service) mutate(ctx context.Context, scope *access.ProjectScope, m Muta
 		return Ticket{}, fault.Field("holdReasonId", "notFound", "No hold reason with this ID exists in the project.")
 	case errors.Is(err, ErrOrganisationInactive):
 		return Ticket{}, errOrganisationInactive()
-	case errors.Is(err, ErrRequestTypeInactive):
-		return Ticket{}, errRequestTypeInactive()
-	case errors.Is(err, ErrRequestTypeGone):
-		return Ticket{}, errRequestTypeNotFound()
 	case errors.Is(err, ErrOrganisationGone):
 		return Ticket{}, errOrganisationNotFound()
 	}

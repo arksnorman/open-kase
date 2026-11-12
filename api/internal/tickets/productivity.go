@@ -156,21 +156,23 @@ func (s *Service) checkTagsKnown(ctx context.Context, projectID string, raw, tag
 // Filter narrows a ticket list. Every filter is intersected with the
 // caller's access; none can widen it.
 type Filter struct {
-	Assignee        string // "", "me", "unassigned" or a user ID
-	Priorities      []int
-	StatusIds       []string
-	Tags            []string // tickets carrying every tag
-	RequestTypeIds  []string
-	OrganisationIds []string
-	RequesterId     string // a contact ID: that contact's tickets
-	Due             string // "", "dueSoon", "breached", "met", "missed" or "running"
+	Assignee       string // "", "me", "unassigned" or a user ID
+	Priorities     []int
+	StatusIds      []string
+	Tags           []string // tickets carrying every tag
+	RequestTypeIds []string
+	// RequestTypeCodes is the alternative to RequestTypeIds (resolved by the service).
+	RequestTypeCodes []string
+	OrganisationIds  []string
+	RequesterId      string // a contact ID: that contact's tickets
+	Due              string // "", "dueSoon", "breached", "met", "missed" or "running"
 }
 
 // requesterSide reports whether the filter uses only the parameters that
 // requester-side tokens may send (statusId, organisationId, requesterId);
 // they only narrow what the token can already read.
 func (f Filter) requesterSide() bool {
-	return f.Assignee == "" && len(f.Priorities) == 0 && len(f.Tags) == 0 && len(f.RequestTypeIds) == 0 && f.Due == ""
+	return f.Assignee == "" && len(f.Priorities) == 0 && len(f.Tags) == 0 && len(f.RequestTypeIds) == 0 && len(f.RequestTypeCodes) == 0 && f.Due == ""
 }
 
 // MaxFilterValues bounds each filter list.
@@ -179,7 +181,7 @@ const MaxFilterValues = 20
 // Empty reports whether the filter selects everything.
 func (f Filter) Empty() bool {
 	return f.Assignee == "" && len(f.Priorities) == 0 && len(f.StatusIds) == 0 &&
-		len(f.Tags) == 0 && len(f.RequestTypeIds) == 0 && len(f.OrganisationIds) == 0 && f.RequesterId == "" && f.Due == ""
+		len(f.Tags) == 0 && len(f.RequestTypeIds) == 0 && len(f.RequestTypeCodes) == 0 && len(f.OrganisationIds) == 0 && f.RequesterId == "" && f.Due == ""
 }
 
 // Normalize validates the filter and normalizes its tags.
@@ -198,6 +200,13 @@ func (f *Filter) Normalize(v *validation.Collector) {
 	}
 	ids("statusIds", f.StatusIds)
 	ids("requestTypeIds", f.RequestTypeIds)
+	bound("requestTypeCodes", len(f.RequestTypeCodes))
+	for i, code := range f.RequestTypeCodes {
+		v.String(validation.RequestTypeCode, prefix+"requestTypeCodes["+strconv.Itoa(i)+"]", code)
+	}
+	if len(f.RequestTypeIds) > 0 && len(f.RequestTypeCodes) > 0 {
+		v.Add("requestTypeCode", "notAllowed", "Send requestTypeId or requestTypeCode, not both.")
+	}
 	ids("organisationIds", f.OrganisationIds)
 	if f.RequesterId != "" {
 		v.String(validation.ObjectID, prefix+"requesterId", f.RequesterId)

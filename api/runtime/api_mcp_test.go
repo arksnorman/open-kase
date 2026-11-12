@@ -158,7 +158,7 @@ func TestMCPToolListingAndAnnotations(t *testing.T) {
 		byName[tl.Name] = tl
 	}
 	reads := []string{"ticketsList", "ticketsSearch", "ticketsGet", "groupsList", "agentsList", "statusesList",
-		"contactsList", "contactsGet", "cannedRepliesList", "tagsList", "holdReasonsList", "organisationsList", "organisationsGet"}
+		"contactsList", "contactsGet", "cannedRepliesList", "tagsList", "holdReasonsList", "requestTypesList", "organisationsList", "organisationsGet"}
 	want := append([]string{"ticketsCreate", "ticketsFollowUp", "ticketsCopy", "ticketsClaim", "ticketsReply", "ticketsAddNote", "ticketsUpdate",
 		"ticketsTransition", "ticketsAssign", "contactsUpsert", "tagsCreate", "tagsDelete", "holdReasonsCreate", "holdReasonsUpdate", "holdReasonsDelete", "organisationsCreate", "organisationsUpdate", "organisationsDelete"}, reads...)
 	if len(byName) != len(want) {

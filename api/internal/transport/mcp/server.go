@@ -30,6 +30,7 @@ import (
 	"github.com/arksnorman/open-kase/api/internal/macros"
 	"github.com/arksnorman/open-kase/api/internal/organisations"
 	"github.com/arksnorman/open-kase/api/internal/projects"
+	"github.com/arksnorman/open-kase/api/internal/requesttypes"
 	"github.com/arksnorman/open-kase/api/internal/statuses"
 	"github.com/arksnorman/open-kase/api/internal/tickets"
 	"github.com/arksnorman/open-kase/api/package/clock"
@@ -68,6 +69,7 @@ type Deps struct {
 	Customers     *customers.Service
 	Macros        *macros.Service
 	HoldReasons   *holdreasons.Service
+	RequestTypes  *requesttypes.Service
 	Organisations *organisations.Service
 	Workflow      *statuses.Catalog
 	Idempotency   idempotency.Store

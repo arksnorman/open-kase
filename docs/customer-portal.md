@@ -118,14 +118,14 @@ never on its name: an admin can rename a type, but its `code` never changes.
 1. In Settings, Request types, create one type per category and give it a `code` equal to your category key (2 to 40
    letters and digits, starting with a lowercase letter, for example `billing`). Without a `code` it is derived from the
    name, which is fine when the key is the camelCase form of the name.
-2. Read `GET /request-types` (any token can) and build a map from `code` to `id`. The list holds the active types in
-   order; use `?active=all` to also see the inactive ones.
-3. Send the `id` as `requestTypeId` on `POST /tickets`. Leave it out to get the default, which is the first active type in
-   order.
+2. Read `GET /request-types` (any token can) to learn which codes exist and are active. The list holds the active types
+   in order; use `?active=all` to also see the inactive ones.
+3. Send the code as `requestTypeCode` on `POST /tickets`; there is no ID to look up. Leave it out to get the default,
+   which is the first active type in order.
 4. Read `requestType.code` on a ticket (`GET /tickets/{t}`, lists) and in the `ticket.created` and `ticket.updated`
    webhook payloads to map back to your category. A ticket keeps its type when an admin deactivates it, and it is still
    returned with the same `code`. A `ticket.updated` payload carries only `requestType.id` when the ticket's type has
    changed again since that event; ignore it, the event for the later change has the `code`.
 5. An admin can deactivate or delete a type at any time. A create that names such a type is refused with `422` on
-   `requestTypeId` (code `inactive`, or `notFound` for a deleted type): read the list again, and fall back to a category
-   you can still map or omit `requestTypeId`.
+   `requestTypeCode` (code `inactive`, or `notFound` for a deleted type): read the list again, and fall back to a category
+   you can still map or omit `requestTypeCode`.

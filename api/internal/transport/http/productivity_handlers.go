@@ -207,7 +207,7 @@ func ListFilter(param func(name string) string) *tickets.Filter {
 		return parts
 	}
 	f := tickets.Filter{Assignee: param("assignee"), StatusIds: split("statusId"), Tags: split("tag"),
-		RequestTypeIds: split("requestTypeId"), OrganisationIds: split("organisationId"), RequesterId: strings.TrimSpace(param("requesterId")), Due: param("due")}
+		RequestTypeIds: split("requestTypeId"), RequestTypeCodes: split("requestTypeCode"), OrganisationIds: split("organisationId"), RequesterId: strings.TrimSpace(param("requesterId")), Due: param("due")}
 	for _, p := range split("priority") {
 		n, err := strconv.Atoi(p)
 		if err != nil {

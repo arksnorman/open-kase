@@ -648,13 +648,13 @@ func TestRequestTypeCodeInMCP(t *testing.T) {
 	f.rtPatch("issue", map[string]any{"active": false}).expect(200)
 	mustFail(t, s, "ticketsCreate", map[string]any{"subject": "S", "body": "B", "requester": map[string]any{"name": "P", "email": "p@acme.example"},
 		"requestTypeId": f.rtID("issue")}, "validationFailed")
-	// There are no request type tools.
+	// The only request type tool is the read-only list; management stays REST and web only.
 	tools, err := s.ListTools(context.Background(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, tl := range tools.Tools {
-		if strings.Contains(strings.ToLower(tl.Name), "requesttype") {
+		if strings.Contains(strings.ToLower(tl.Name), "requesttype") && tl.Name != "requestTypesList" {
 			t.Fatalf("unexpected tool %s", tl.Name)
 		}
 	}
@@ -1064,4 +1064,258 @@ func TestOrganisationRaceWithTicketCreate(t *testing.T) {
 			t.Fatalf("round %d: change answered %d %s", round, change.Code, change.Body)
 		}
 	}
+}
+
+// Owner request 2026-11-12: requestTypeCode wherever requestTypeId is accepted.
+
+func newTicketBody(extra map[string]any) map[string]any {
+	b := map[string]any{"subject": "S", "body": "B", "requester": map[string]any{"name": "P", "email": "p@acme.example"}}
+	for k, v := range extra {
+		b[k] = v
+	}
+	return b
+}
+
+func TestRequestTypeCodeOnCreate(t *testing.T) {
+	f := newTicketFixture(t)
+	service := f.rtID("serviceRequest")
+	// A user and a requester-side token may both name the type by code.
+	for _, tok := range []string{f.dana.Access, f.integration} {
+		key := f.do("POST", "/api/v1/tickets", newTicketBody(map[string]any{"requestTypeCode": "serviceRequest"}), bearer(tok)).expect(201).Ref()
+		if rt := f.ticketType(key); rt["id"] != service || rt["code"] != "serviceRequest" {
+			t.Fatalf("by code: %v", rt)
+		}
+	}
+	post := func(extra map[string]any) result {
+		return f.do("POST", "/api/v1/tickets", newTicketBody(extra), bearer(f.dana.Access))
+	}
+	// Both fields: refused even when they name the same type.
+	post(map[string]any{"requestTypeId": service, "requestTypeCode": "serviceRequest"}).expectField("requestTypeCode", "notAllowed")
+	post(map[string]any{"requestTypeId": f.rtID("issue"), "requestTypeCode": "serviceRequest"}).expectField("requestTypeCode", "notAllowed")
+	post(map[string]any{"requestTypeCode": "nosuchtype"}).expectField("requestTypeCode", "notFound")
+	post(map[string]any{"requestTypeCode": "servicerequest"}).expectField("requestTypeCode", "notFound") // case-sensitive
+	post(map[string]any{"requestTypeCode": "Bad code"}).expectField("requestTypeCode", "invalidFormat")
+	post(map[string]any{"requestTypeCode": ""}).expect(422, "validationFailed")
+	f.rtPatch("serviceRequest", map[string]any{"active": false}).expect(200)
+	post(map[string]any{"requestTypeCode": "serviceRequest"}).expectField("requestTypeCode", "inactive")
+	f.do("POST", "/api/v1/tickets", newTicketBody(map[string]any{"requestTypeCode": "serviceRequest"}), bearer(f.integration)).expectField("requestTypeCode", "inactive")
+}
+
+func TestRequestTypeCodeOnUpdate(t *testing.T) {
+	nf := newNotifyFixture(t)
+	nf.c.Boot.Env = EnvDevelopment
+	hs := newHookServer(t)
+	nf.addHook(hs, "ticket.updated")
+	key := nf.createTicket(nf.dana.Access, map[string]any{"requestTypeCode": "issue"}).Ref()
+	nf.drain()
+	patch := func(tok string, body map[string]any) result {
+		return nf.do("PATCH", tpath(key), body, bearer(tok), ifMatchV(nf.version(key)))
+	}
+	before := len(nf.rtAudits("ticket.updated"))
+	got := patch(nf.dana.Access, map[string]any{"requestTypeCode": "question"}).expect(200).JSON()
+	if rt := obj(got, "requestType"); rt["id"] != nf.rtID("question") || rt["code"] != "question" {
+		t.Fatalf("by code: %v", rt)
+	}
+	audits := nf.rtAudits("ticket.updated")
+	if len(audits) != before+1 || !slices.Equal(audits[len(audits)-1], []string{"requestType"}) {
+		t.Fatalf("audit: %v", audits)
+	}
+	nf.drain()
+	ups := hookEnvelopes(t, hs)["ticket.updated"]
+	if len(ups) != 1 || obj(obj(ups[0], "data"), "requestType")["code"] != "question" {
+		t.Fatalf("ticket.updated: %v", ups)
+	}
+
+	// The same type is a no-op: same version, no audit event, also when it is inactive.
+	v := nf.version(key)
+	patch(nf.dana.Access, map[string]any{"requestTypeCode": "question"}).expect(200)
+	nf.rtPatch("question", map[string]any{"active": false}).expect(200)
+	patch(nf.dana.Access, map[string]any{"requestTypeCode": "question"}).expect(200)
+	if nf.version(key) != v || len(nf.rtAudits("ticket.updated")) != before+1 {
+		t.Fatalf("no-op changed the ticket: version %d -> %d, audits %d", v, nf.version(key), len(nf.rtAudits("ticket.updated")))
+	}
+	// Refusals.
+	patch(nf.dana.Access, map[string]any{"requestTypeCode": "issue", "requestTypeId": nf.rtID("issue")}).expectField("requestTypeCode", "notAllowed")
+	patch(nf.dana.Access, map[string]any{"requestTypeCode": "nosuchtype"}).expectField("requestTypeCode", "notFound")
+	patch(nf.dana.Access, map[string]any{"requestTypeCode": "Bad code"}).expectField("requestTypeCode", "invalidFormat")
+	patch(nf.dana.Access, map[string]any{"requestTypeCode": "serviceRequest"}).expect(200)
+	nf.rtPatch("featureRequest", map[string]any{"active": false}).expect(200)
+	patch(nf.dana.Access, map[string]any{"requestTypeCode": "featureRequest"}).expectField("requestTypeCode", "inactive")
+
+	// A requester-side token is refused exactly as it is for requestTypeId.
+	ikey := nf.createTicket(nf.integration, map[string]any{}).Ref()
+	byID := nf.do("PATCH", tpath(ikey), map[string]any{"requestTypeId": nf.rtID("issue")}, bearer(nf.integration)).Code
+	byCode := nf.do("PATCH", tpath(ikey), map[string]any{"requestTypeCode": "issue"}, bearer(nf.integration))
+	if byID != 403 || byCode.Code != byID {
+		t.Fatalf("requester-side update: by id %d, by code %d %s", byID, byCode.Code, byCode.Body)
+	}
+}
+
+func TestRequestTypeCodeOnFollowUpAndCopy(t *testing.T) {
+	f := newTicketFixture(t)
+	key := f.createTicket(f.dana.Access, map[string]any{"requestTypeCode": "issue"}).Ref()
+	for _, path := range []string{"/follow-up", "/copy"} {
+		got := f.do("POST", tpath(key, path), map[string]any{"requestTypeCode": "question"}, bearer(f.dana.Access)).expect(201).Ref()
+		if rt := f.ticketType(got); rt["code"] != "question" || rt["id"] != f.rtID("question") {
+			t.Fatalf("%s: %v", path, rt)
+		}
+		f.do("POST", tpath(key, path), map[string]any{"requestTypeCode": "question", "requestTypeId": f.rtID("question")}, bearer(f.dana.Access)).expectField("requestTypeCode", "notAllowed")
+		f.do("POST", tpath(key, path), map[string]any{"requestTypeCode": "nosuchtype"}, bearer(f.dana.Access)).expectField("requestTypeCode", "notFound")
+		f.do("POST", tpath(key, path), map[string]any{"requestTypeCode": "Bad code"}, bearer(f.dana.Access)).expectField("requestTypeCode", "invalidFormat")
+	}
+	// A requester-side follow-up with a code is refused like one with an ID.
+	byID := f.do("POST", tpath(key, "/follow-up"), map[string]any{"requestTypeId": f.rtID("question")}, bearer(f.integration))
+	byCode := f.do("POST", tpath(key, "/follow-up"), map[string]any{"requestTypeCode": "question"}, bearer(f.integration))
+	if byID.Code != 403 || byCode.Code != 403 || byID.Problem().Code != byCode.Problem().Code {
+		t.Fatalf("requester-side follow-up: by id %d %s, by code %d %s", byID.Code, byID.Body, byCode.Code, byCode.Body)
+	}
+	f.rtPatch("question", map[string]any{"active": false}).expect(200)
+	f.do("POST", tpath(key, "/follow-up"), map[string]any{"requestTypeCode": "question"}, bearer(f.dana.Access)).expectField("requestTypeCode", "inactive")
+	f.do("POST", tpath(key, "/copy"), map[string]any{"requestTypeCode": "question"}, bearer(f.dana.Access)).expectField("requestTypeCode", "inactive")
+}
+
+func TestRequestTypeCodeListFilter(t *testing.T) {
+	f := newTicketFixture(t)
+	a := f.createTicket(f.dana.Access, map[string]any{"requestTypeCode": "issue"}).Ref()
+	b := f.createTicket(f.dana.Access, map[string]any{"requestTypeCode": "question"}).Ref()
+	c := f.createTicket(f.dana.Access, map[string]any{"requestTypeCode": "serviceRequest"}).Ref()
+	list := func(q string) []string {
+		return keys(f.do("GET", "/api/v1/tickets?"+q, nil, bearer(f.dana.Access)).expect(200).Items())
+	}
+	if got := list("requestTypeCode=issue"); !slices.Equal(got, []string{a}) {
+		t.Fatalf("one code: %v", got)
+	}
+	got := list("requestTypeCode=issue,question")
+	slices.Sort(got)
+	if want := []string{a, b}; !slices.Equal(got, want) {
+		t.Fatalf("two codes: %v want %v", got, want)
+	}
+	// An unknown code among known ones is ignored; all unknown is an empty page.
+	if got := list("requestTypeCode=issue,nosuchtype"); !slices.Equal(got, []string{a}) {
+		t.Fatalf("unknown among known: %v", got)
+	}
+	if got := list("requestTypeCode=nosuchtype"); len(got) != 0 {
+		t.Fatalf("unknown code: %v", got)
+	}
+	// An inactive type's code still finds its tickets.
+	f.rtPatch("serviceRequest", map[string]any{"active": false}).expect(200)
+	if got := list("requestTypeCode=serviceRequest"); !slices.Equal(got, []string{c}) {
+		t.Fatalf("inactive type: %v", got)
+	}
+	// Refusals.
+	f.do("GET", "/api/v1/tickets?requestTypeCode=issue&requestTypeId="+f.rtID("issue"), nil, bearer(f.dana.Access)).expectField("requestTypeCode", "notAllowed")
+	f.do("GET", "/api/v1/tickets?requestTypeCode=Bad%20code", nil, bearer(f.dana.Access)).expectField("requestTypeCodes[0]", "invalidFormat")
+	f.do("GET", "/api/v1/tickets?requestTypeCode=issue,Bad", nil, bearer(f.dana.Access)).expectField("requestTypeCodes[1]", "invalidFormat")
+	many := strings.TrimSuffix(strings.Repeat("issue,", 21), ",")
+	f.do("GET", "/api/v1/tickets?requestTypeCode="+many, nil, bearer(f.dana.Access)).expectField("requestTypeCodes", "tooLong")
+	byID := f.do("GET", "/api/v1/tickets?requestTypeId="+f.rtID("issue"), nil, bearer(f.integration))
+	byCode := f.do("GET", "/api/v1/tickets?requestTypeCode=issue", nil, bearer(f.integration))
+	if byID.Code != 403 || byCode.Code != 403 || byID.Problem().Code != byCode.Problem().Code {
+		t.Fatalf("requester-side filter: by id %d %s, by code %d %s", byID.Code, byID.Body, byCode.Code, byCode.Body)
+	}
+}
+
+func TestRequestTypeCodeRaceWithTicketUpdateAndCreate(t *testing.T) {
+	f := newTicketFixture(t)
+	key := f.createTicket(f.dana.Access, map[string]any{}).Ref()
+	for round := range 8 {
+		code := fmt.Sprintf("raceType%d", round)
+		id := f.rtCreate(fmt.Sprintf("Code race %d", round), code).expect(201).JSON()["id"].(string)
+		v := f.version(key)
+		rs := concurrently(
+			func() result {
+				return f.do("PATCH", tpath(key), map[string]any{"requestTypeCode": code}, bearer(f.dana.Access), ifMatchV(v))
+			},
+			func() result {
+				return f.do("POST", "/api/v1/tickets", newTicketBody(map[string]any{"requestTypeCode": code}), bearer(f.dana.Access))
+			},
+			func() result {
+				return f.do("DELETE", "/api/v1/request-types/"+id, nil, bearer(f.admin.Access), ifMatchV(1))
+			},
+		)
+		for _, r := range rs[:2] {
+			switch r.Code {
+			case 200, 201:
+			case 422:
+				if strings.Contains(string(r.Body), `"requestTypeId"`) || !strings.Contains(string(r.Body), `"requestTypeCode"`) {
+					t.Fatalf("round %d: the refusal must name requestTypeCode: %s", round, r.Body)
+				}
+			default:
+				t.Fatalf("round %d: %d %s", round, r.Code, r.Body)
+			}
+		}
+		if rs[2].Code != 204 && rs[2].Code != 409 {
+			t.Fatalf("round %d: delete %d %s", round, rs[2].Code, rs[2].Body)
+		}
+	}
+}
+
+func TestMCPRequestTypesList(t *testing.T) {
+	f := newMCPFixture(t)
+	_, req := f.integration("Portal", "tickets:create", "tickets:replyAsRequester")
+	for name, tok := range map[string]string{"user": f.dana.Access, "requester-side token": req} {
+		s := f.connect(tok)
+		items := mustCall(t, s, "requestTypesList", nil)["items"].([]any)
+		if len(items) != 4 {
+			t.Fatalf("%s default: %v", name, items)
+		}
+		first := items[0].(map[string]any)
+		if first["code"] != "issue" || first["id"] == "" || first["name"] != "Issue" || first["active"] != true {
+			t.Fatalf("%s item: %v", name, first)
+		}
+		mustFail(t, s, "requestTypesList", map[string]any{"active": "maybe"}, "validationFailed")
+	}
+	f.rtPatch("question", map[string]any{"active": false}).expect(200)
+	s := f.connect(f.dana.Access)
+	codes := func(args map[string]any) string {
+		var out []string
+		for _, it := range mustCall(t, s, "requestTypesList", args)["items"].([]any) {
+			out = append(out, it.(map[string]any)["code"].(string))
+		}
+		return strings.Join(out, ",")
+	}
+	if got := codes(nil); got != f.rtCodes("") || strings.Contains(got, "question") {
+		t.Fatalf("default: %s", got)
+	}
+	if got := codes(map[string]any{"active": "true"}); strings.Contains(got, "question") {
+		t.Fatalf("active=true: %s", got)
+	}
+	if got := codes(map[string]any{"active": "false"}); got != "question" {
+		t.Fatalf("active=false: %s", got)
+	}
+	if got := codes(map[string]any{"active": "all"}); got != f.rtCodes("?active=all") || !strings.Contains(got, "question") {
+		t.Fatalf("active=all: %s", got)
+	}
+}
+
+func TestMCPTicketsWithRequestTypeCode(t *testing.T) {
+	f := newMCPFixture(t)
+	_, tok := f.token("Back office", "tickets:read", "tickets:create", "tickets:write")
+	s := f.connect(tok)
+	created := mustCall(t, s, "ticketsCreate", map[string]any{"subject": "S", "body": "B", "requester": map[string]any{"name": "P", "email": "p@acme.example"},
+		"requestTypeCode": "serviceRequest"})
+	if rt := obj(created, "requestType"); rt["id"] != f.rtID("serviceRequest") || rt["code"] != "serviceRequest" {
+		t.Fatalf("ticketsCreate: %v", created)
+	}
+	mustFail(t, s, "ticketsCreate", map[string]any{"subject": "S", "body": "B", "requester": map[string]any{"name": "P", "email": "p@acme.example"},
+		"requestTypeCode": "serviceRequest", "requestTypeId": f.rtID("serviceRequest")}, "validationFailed")
+	mustFail(t, s, "ticketsCreate", map[string]any{"subject": "S", "body": "B", "requester": map[string]any{"name": "P", "email": "p@acme.example"},
+		"requestTypeCode": "nosuchtype"}, "validationFailed")
+
+	upd := mustCall(t, s, "ticketsUpdate", map[string]any{"ticket": refOf(created), "requestTypeCode": "question"})
+	if rt := obj(upd, "requestType"); rt["code"] != "question" {
+		t.Fatalf("ticketsUpdate: %v", upd)
+	}
+	other := mustCall(t, s, "ticketsCreate", map[string]any{"subject": "S", "body": "B", "requester": map[string]any{"name": "P", "email": "p@acme.example"},
+		"requestTypeCode": "issue"})
+	for _, c := range []struct{ filter, want string }{{"question", refOf(created)}, {"issue", refOf(other)}} {
+		items := mustCall(t, s, "ticketsList", map[string]any{"requestTypeCode": c.filter})["items"].([]any)
+		if len(items) != 1 || refOf(items[0].(map[string]any)) != c.want {
+			t.Fatalf("ticketsList %s: %v", c.filter, items)
+		}
+	}
+	if items := mustCall(t, s, "ticketsList", map[string]any{"requestTypeCode": "nosuchtype"})["items"].([]any); len(items) != 0 {
+		t.Fatalf("unknown code: %v", items)
+	}
+	mustFail(t, s, "ticketsList", map[string]any{"requestTypeCode": "issue", "requestTypeId": f.rtID("issue")}, "validationFailed")
 }

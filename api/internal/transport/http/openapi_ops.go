@@ -39,8 +39,9 @@ var (
 		q("statusId", "Comma-separated status IDs (also for requester-side tokens)."),
 		q("tag", "Comma-separated tags; tickets carrying every tag."),
 		q("requestTypeId", "Comma-separated request type IDs."),
+		q("requestTypeCode", "Comma-separated request type codes, an alternative to `requestTypeId` (both: `422 notAllowed`). Inactive types are included; a code no type has matches nothing."),
 		q("organisationId", "Comma-separated organisation IDs (also for requester-side tokens)."),
-		q("requesterId", "A contact ID: only that contact's tickets (also for requester-side tokens). `assignee`, `priority`, `tag`, `requestTypeId` and `due` are staff only (`403 userRequired` for requester-side tokens)."),
+		q("requesterId", "A contact ID: only that contact's tickets (also for requester-side tokens). `assignee`, `priority`, `tag`, `requestTypeId`, `requestTypeCode` and `due` are staff only (`403 userRequired` for requester-side tokens)."),
 		qe("due", "SLA filter: `dueSoon` (warning time passed, not yet past due), `breached` (running past its deadline), `met` (first response in time), `missed` (first response after the deadline) or `running` (within time).", validation.ViewDue),
 	}
 	deliveryParams = []param{
@@ -201,7 +202,7 @@ func operations() []op {
 			Permission: permMember + " Integrations: any scope.", Response: requestTypeDTO{}, List: true,
 			Query:  []param{qe("active", "`true` (default; what pickers use), `false` or `all`.", validation.RequestTypeActiveFilter)},
 			Errors: []errSpec{{422, []string{"validationFailed"}}},
-			Description: "By `order`. Integrations map their categories by `code`, which never changes, and send the `id` as `requestTypeId`. " +
+			Description: "By `order`. Integrations map their categories by `code`, which never changes, and send it as `requestTypeCode` (or the `id` as `requestTypeId`). " +
 				"`inUse` (tickets carrying the type) is reported to admins; 0 for everyone else."},
 		{Method: "POST", Path: "/api/v1/request-types", Id: "createRequestType", Tag: "Project", Summary: "Create a request type", Auth: authUser,
 			Permission: permAdmin + " API tokens: never.", Request: createRequestTypeBody{}, Response: requestTypeDTO{}, Status: 201, Idempotent: true,
