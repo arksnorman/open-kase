@@ -205,7 +205,7 @@ func (f *Filter) Normalize(v *validation.Collector) {
 		v.String(validation.RequestTypeCode, prefix+"requestTypeCodes["+strconv.Itoa(i)+"]", code)
 	}
 	if len(f.RequestTypeIds) > 0 && len(f.RequestTypeCodes) > 0 {
-		v.Add("requestTypeCode", "notAllowed", "Send requestTypeId or requestTypeCode, not both.")
+		v.Add("requestTypeCode", "invalidCombination", "Send requestTypeId or requestTypeCode, not both.")
 	}
 	ids("organisationIds", f.OrganisationIds)
 	if f.RequesterId != "" {

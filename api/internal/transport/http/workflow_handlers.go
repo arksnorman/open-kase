@@ -92,7 +92,7 @@ type followUpRequest struct {
 	AddSignature    *bool    `json:"addSignature" doc:"Users only: false skips your signature and the workspace signature on the first message."`
 	GroupId         *string  `json:"groupId" doc:"Defaults to the original's group (Triage when inactive)."`
 	RequestTypeId   *string  `json:"requestTypeId" doc:"Defaults to the original's request type (the default type when that one is inactive). An inactive type is refused."`
-	RequestTypeCode *string  `json:"requestTypeCode" doc:"Alternative to requestTypeId (not both: 422 notAllowed). The type's stable code; no such type is 422 notFound, an inactive one 422 inactive."`
+	RequestTypeCode *string  `json:"requestTypeCode" doc:"Alternative to requestTypeId (not both: 422 invalidCombination). The type's stable code; no such type is 422 notFound, an inactive one 422 inactive."`
 	Tags            []string `json:"tags" doc:"Catalog tags for the follow-up (none by default)."`
 	ContactId       string   `json:"contactId" doc:"Only when the first message is written as the requester (a token with neither tickets:comment nor tickets:all): open the follow-up as this contact of the original's organisation (contactNotInOrganisation otherwise): they become the requester of the new ticket and author its first message. Users and tokens that write as the bot: 422 notAllowed."`
 }
@@ -121,7 +121,7 @@ type copyRequest struct {
 	GroupId            *string   `json:"groupId" doc:"Defaults to the original's group (the Triage group when it is inactive)."`
 	Priority           *int      `json:"priority" minimum:"1" maximum:"4" doc:"Defaults to the original's priority."`
 	RequestTypeId      *string   `json:"requestTypeId" doc:"Defaults to the original's request type (the default type when that one is inactive). An inactive type is refused."`
-	RequestTypeCode    *string   `json:"requestTypeCode" doc:"Alternative to requestTypeId (not both: 422 notAllowed). The type's stable code; no such type is 422 notFound, an inactive one 422 inactive."`
+	RequestTypeCode    *string   `json:"requestTypeCode" doc:"Alternative to requestTypeId (not both: 422 invalidCombination). The type's stable code; no such type is 422 notFound, an inactive one 422 inactive."`
 	Tags               *[]string `json:"tags" doc:"Catalog tags; defaults to the original's tags that still exist."`
 	Body               *string   `json:"body" doc:"First public message; defaults to the original's first public message."`
 	IncludeAttachments *bool     `json:"includeAttachments" doc:"Copy the original first message's attachments (default true)."`

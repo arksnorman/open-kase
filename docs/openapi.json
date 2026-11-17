@@ -794,7 +794,7 @@
             ]
           },
           "requestTypeCode": {
-            "description": "Alternative to requestTypeId (not both: 422 notAllowed). The type's stable code; no such type is 422 notFound, an inactive one 422 inactive.",
+            "description": "Alternative to requestTypeId (not both: 422 invalidCombination). The type's stable code; no such type is 422 notFound, an inactive one 422 inactive.",
             "type": [
               "string",
               "null"
@@ -983,7 +983,7 @@
             ]
           },
           "requestTypeCode": {
-            "description": "Alternative to requestTypeId (not both: 422 notAllowed). The type's stable code; no such type is 422 notFound, an inactive one 422 inactive.",
+            "description": "Alternative to requestTypeId (not both: 422 invalidCombination). The type's stable code; no such type is 422 notFound, an inactive one 422 inactive.",
             "type": [
               "string",
               "null"
@@ -1414,7 +1414,7 @@
             ]
           },
           "requestTypeCode": {
-            "description": "Alternative to requestTypeId (not both: 422 notAllowed). The type's stable code; no such type is 422 notFound, an inactive one 422 inactive.",
+            "description": "Alternative to requestTypeId (not both: 422 invalidCombination). The type's stable code; no such type is 422 notFound, an inactive one 422 inactive.",
             "type": [
               "string",
               "null"
@@ -2464,7 +2464,7 @@
             ]
           },
           "requestTypeCode": {
-            "description": "Alternative to requestTypeId (not both: 422 notAllowed). The type's stable code; no such type is 422 notFound, an inactive one 422 inactive; a ticket that already carries that type keeps it.",
+            "description": "Alternative to requestTypeId (not both: 422 invalidCombination). The type's stable code; no such type is 422 notFound, an inactive one 422 inactive; a ticket that already carries that type keeps it.",
             "type": [
               "string",
               "null"
@@ -12497,7 +12497,7 @@
             }
           },
           {
-            "description": "Comma-separated request type codes, an alternative to `requestTypeId` (both: `422 notAllowed`). Inactive types are included; a code no type has matches nothing.",
+            "description": "Comma-separated request type codes, an alternative to `requestTypeId` (both: `422 invalidCombination`). Inactive types are included; a code no type has matches nothing.",
             "in": "query",
             "name": "requestTypeCode",
             "schema": {

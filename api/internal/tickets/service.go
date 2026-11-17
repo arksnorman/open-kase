@@ -659,7 +659,7 @@ func validateTypeRef(v *validation.Collector, id, code *string) {
 		v.String(validation.RequestTypeCode, "requestTypeCode", *code)
 	}
 	if id != nil && code != nil {
-		v.Add("requestTypeCode", "notAllowed", "Send requestTypeId or requestTypeCode, not both.")
+		v.Add("requestTypeCode", "invalidCombination", "Send requestTypeId or requestTypeCode, not both.")
 	}
 }
 

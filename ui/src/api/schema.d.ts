@@ -2435,7 +2435,7 @@ export interface components {
             includeAttachments?: boolean | null;
             /** @description Defaults to the original's priority. */
             priority?: number | null;
-            /** @description Alternative to requestTypeId (not both: 422 notAllowed). The type's stable code; no such type is 422 notFound, an inactive one 422 inactive. */
+            /** @description Alternative to requestTypeId (not both: 422 invalidCombination). The type's stable code; no such type is 422 notFound, an inactive one 422 inactive. */
             requestTypeCode?: string | null;
             /** @description Defaults to the original's request type (the default type when that one is inactive). An inactive type is refused. */
             requestTypeId?: string | null;
@@ -2480,7 +2480,7 @@ export interface components {
             /** @description Optional: the organisation (from POST /organisations) this ticket belongs to. Set explicitly; it is not taken from the requester. */
             organisationId?: string | null;
             priority?: number | null;
-            /** @description Alternative to requestTypeId (not both: 422 notAllowed). The type's stable code; no such type is 422 notFound, an inactive one 422 inactive. */
+            /** @description Alternative to requestTypeId (not both: 422 invalidCombination). The type's stable code; no such type is 422 notFound, an inactive one 422 inactive. */
             requestTypeCode?: string | null;
             /** @description An active request type; defaults to the first active one. An inactive type is 422 (inactive). */
             requestTypeId?: string | null;
@@ -2591,7 +2591,7 @@ export interface components {
             /** @description Defaults to the original's group (Triage when inactive). */
             groupId?: string | null;
             priority?: number | null;
-            /** @description Alternative to requestTypeId (not both: 422 notAllowed). The type's stable code; no such type is 422 notFound, an inactive one 422 inactive. */
+            /** @description Alternative to requestTypeId (not both: 422 invalidCombination). The type's stable code; no such type is 422 notFound, an inactive one 422 inactive. */
             requestTypeCode?: string | null;
             /** @description Defaults to the original's request type (the default type when that one is inactive). An inactive type is refused. */
             requestTypeId?: string | null;
@@ -2889,7 +2889,7 @@ export interface components {
             /** @description Staff only. Links the ticket to an organisation; an empty string clears it. Signed-in users get 403 organisationManagedByIntegration when the ticket was created through the API or MCP; only integration credentials may change it. */
             organisationId?: string | null;
             priority?: number | null;
-            /** @description Alternative to requestTypeId (not both: 422 notAllowed). The type's stable code; no such type is 422 notFound, an inactive one 422 inactive; a ticket that already carries that type keeps it. */
+            /** @description Alternative to requestTypeId (not both: 422 invalidCombination). The type's stable code; no such type is 422 notFound, an inactive one 422 inactive; a ticket that already carries that type keeps it. */
             requestTypeCode?: string | null;
             /** @description An active request type. A ticket that already carries an inactive type keeps it. */
             requestTypeId?: string | null;
@@ -9195,7 +9195,7 @@ export interface operations {
                 tag?: string;
                 /** @description Comma-separated request type IDs. */
                 requestTypeId?: string;
-                /** @description Comma-separated request type codes, an alternative to `requestTypeId` (both: `422 notAllowed`). Inactive types are included; a code no type has matches nothing. */
+                /** @description Comma-separated request type codes, an alternative to `requestTypeId` (both: `422 invalidCombination`). Inactive types are included; a code no type has matches nothing. */
                 requestTypeCode?: string;
                 /** @description Comma-separated organisation IDs (also for requester-side tokens). */
                 organisationId?: string;

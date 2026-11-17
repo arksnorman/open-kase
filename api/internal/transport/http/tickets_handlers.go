@@ -90,7 +90,7 @@ type createTicketRequest struct {
 	Requester       requesterBody `json:"requester" required:"true" doc:"An existing contactId, or name and email (plus optional externalId) to find or create the contact."`
 	Priority        *int          `json:"priority" minimum:"1" maximum:"4"`
 	RequestTypeId   *string       `json:"requestTypeId" doc:"An active request type; defaults to the first active one. An inactive type is 422 (inactive)."`
-	RequestTypeCode *string       `json:"requestTypeCode" doc:"Alternative to requestTypeId (not both: 422 notAllowed). The type's stable code; no such type is 422 notFound, an inactive one 422 inactive."`
+	RequestTypeCode *string       `json:"requestTypeCode" doc:"Alternative to requestTypeId (not both: 422 invalidCombination). The type's stable code; no such type is 422 notFound, an inactive one 422 inactive."`
 	GroupId         *string       `json:"groupId"`
 	AttachmentIds   []string      `json:"attachmentIds"`
 	OrganisationId  *string       `json:"organisationId" doc:"Optional: the organisation (from POST /organisations) this ticket belongs to. Set explicitly; it is not taken from the requester."`
@@ -132,7 +132,7 @@ type patchTicketRequest struct {
 	Subject         *string   `json:"subject"`
 	Priority        *int      `json:"priority" minimum:"1" maximum:"4"`
 	RequestTypeId   *string   `json:"requestTypeId" doc:"An active request type. A ticket that already carries an inactive type keeps it."`
-	RequestTypeCode *string   `json:"requestTypeCode" doc:"Alternative to requestTypeId (not both: 422 notAllowed). The type's stable code; no such type is 422 notFound, an inactive one 422 inactive; a ticket that already carries that type keeps it."`
+	RequestTypeCode *string   `json:"requestTypeCode" doc:"Alternative to requestTypeId (not both: 422 invalidCombination). The type's stable code; no such type is 422 notFound, an inactive one 422 inactive; a ticket that already carries that type keeps it."`
 	Tags            *[]string `json:"tags"`
 	OrganisationId  *string   `json:"organisationId" doc:"Staff only. Links the ticket to an organisation; an empty string clears it. Signed-in users get 403 organisationManagedByIntegration when the ticket was created through the API or MCP; only integration credentials may change it."`
 	CCEmails        *[]string `json:"ccEmails" doc:"Staff only. Replaces the CC addresses (up to 10; lower-cased and deduplicated; not the requester's address); an empty list clears them."`

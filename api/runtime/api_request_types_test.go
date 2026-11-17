@@ -1090,8 +1090,8 @@ func TestRequestTypeCodeOnCreate(t *testing.T) {
 		return f.do("POST", "/api/v1/tickets", newTicketBody(extra), bearer(f.dana.Access))
 	}
 	// Both fields: refused even when they name the same type.
-	post(map[string]any{"requestTypeId": service, "requestTypeCode": "serviceRequest"}).expectField("requestTypeCode", "notAllowed")
-	post(map[string]any{"requestTypeId": f.rtID("issue"), "requestTypeCode": "serviceRequest"}).expectField("requestTypeCode", "notAllowed")
+	post(map[string]any{"requestTypeId": service, "requestTypeCode": "serviceRequest"}).expectField("requestTypeCode", "invalidCombination")
+	post(map[string]any{"requestTypeId": f.rtID("issue"), "requestTypeCode": "serviceRequest"}).expectField("requestTypeCode", "invalidCombination")
 	post(map[string]any{"requestTypeCode": "nosuchtype"}).expectField("requestTypeCode", "notFound")
 	post(map[string]any{"requestTypeCode": "servicerequest"}).expectField("requestTypeCode", "notFound") // case-sensitive
 	post(map[string]any{"requestTypeCode": "Bad code"}).expectField("requestTypeCode", "invalidFormat")
@@ -1135,7 +1135,7 @@ func TestRequestTypeCodeOnUpdate(t *testing.T) {
 		t.Fatalf("no-op changed the ticket: version %d -> %d, audits %d", v, nf.version(key), len(nf.rtAudits("ticket.updated")))
 	}
 	// Refusals.
-	patch(nf.dana.Access, map[string]any{"requestTypeCode": "issue", "requestTypeId": nf.rtID("issue")}).expectField("requestTypeCode", "notAllowed")
+	patch(nf.dana.Access, map[string]any{"requestTypeCode": "issue", "requestTypeId": nf.rtID("issue")}).expectField("requestTypeCode", "invalidCombination")
 	patch(nf.dana.Access, map[string]any{"requestTypeCode": "nosuchtype"}).expectField("requestTypeCode", "notFound")
 	patch(nf.dana.Access, map[string]any{"requestTypeCode": "Bad code"}).expectField("requestTypeCode", "invalidFormat")
 	patch(nf.dana.Access, map[string]any{"requestTypeCode": "serviceRequest"}).expect(200)
@@ -1164,7 +1164,7 @@ func TestRequestTypeCodeOnFollowUpAndCopy(t *testing.T) {
 		if rt := f.ticketType(got); rt["code"] != "question" || rt["id"] != f.rtID("question") {
 			t.Fatalf("%s: %v", path, rt)
 		}
-		f.do("POST", tpath(key, path), map[string]any{"requestTypeCode": "question", "requestTypeId": f.rtID("question")}, bearer(f.dana.Access)).expectField("requestTypeCode", "notAllowed")
+		f.do("POST", tpath(key, path), map[string]any{"requestTypeCode": "question", "requestTypeId": f.rtID("question")}, bearer(f.dana.Access)).expectField("requestTypeCode", "invalidCombination")
 		f.do("POST", tpath(key, path), map[string]any{"requestTypeCode": "nosuchtype"}, bearer(f.dana.Access)).expectField("requestTypeCode", "notFound")
 		f.do("POST", tpath(key, path), map[string]any{"requestTypeCode": "Bad code"}, bearer(f.dana.Access)).expectField("requestTypeCode", "invalidFormat")
 	}
@@ -1208,7 +1208,7 @@ func TestRequestTypeCodeListFilter(t *testing.T) {
 		t.Fatalf("inactive type: %v", got)
 	}
 	// Refusals.
-	f.do("GET", "/api/v1/tickets?requestTypeCode=issue&requestTypeId="+f.rtID("issue"), nil, bearer(f.dana.Access)).expectField("requestTypeCode", "notAllowed")
+	f.do("GET", "/api/v1/tickets?requestTypeCode=issue&requestTypeId="+f.rtID("issue"), nil, bearer(f.dana.Access)).expectField("requestTypeCode", "invalidCombination")
 	f.do("GET", "/api/v1/tickets?requestTypeCode=Bad%20code", nil, bearer(f.dana.Access)).expectField("requestTypeCodes[0]", "invalidFormat")
 	f.do("GET", "/api/v1/tickets?requestTypeCode=issue,Bad", nil, bearer(f.dana.Access)).expectField("requestTypeCodes[1]", "invalidFormat")
 	many := strings.TrimSuffix(strings.Repeat("issue,", 21), ",")
@@ -1323,4 +1323,18 @@ func TestMCPTicketsWithRequestTypeCode(t *testing.T) {
 		t.Fatalf("unknown code: %v", items)
 	}
 	mustFail(t, s, "ticketsList", map[string]any{"requestTypeCode": "issue", "requestTypeId": f.rtID("issue")}, "validationFailed")
+
+	// Follow-up and copy take the code too (the original is a question now).
+	for _, tool := range []string{"ticketsFollowUp", "ticketsCopy"} {
+		got := mustCall(t, s, tool, map[string]any{"ticket": refOf(created), "requestTypeCode": "featureRequest"})
+		if rt := obj(got, "requestType"); rt["code"] != "featureRequest" {
+			t.Fatalf("%s: %v", tool, got)
+		}
+	}
+
+	// Overriding the type of a copy needs tickets:write, by code exactly as by ID.
+	_, createOnly := f.token("Staff without write", "tickets:read", "tickets:create", "tickets:comment")
+	c := f.connect(createOnly)
+	mustFail(t, c, "ticketsCopy", map[string]any{"ticket": refOf(created), "requestTypeId": f.rtID("issue")}, "insufficientScope")
+	mustFail(t, c, "ticketsCopy", map[string]any{"ticket": refOf(created), "requestTypeCode": "issue"}, "insufficientScope")
 }

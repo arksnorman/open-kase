@@ -29,9 +29,6 @@ type requestTypeDTO struct {
 }
 
 // requestTypeRefDTO is a ticket's request type.
-// RequestTypeView returns the contract's RequestType for t (MCP adapter).
-func RequestTypeView(t requesttypes.Type) any { return toRequestType(t) }
-
 type requestTypeRefDTO struct {
 	Id   string `json:"id"`
 	Code string `json:"code" doc:"The type's code, which never changes."`
@@ -41,6 +38,9 @@ type requestTypeRefDTO struct {
 func toRequestType(t requesttypes.Type) requestTypeDTO {
 	return requestTypeDTO{Id: t.Id, Code: t.Code, Name: t.Name, Order: t.Order, Active: t.Active, InUse: t.InUse, CreatedAt: t.CreatedAt, Version: t.Version}
 }
+
+// RequestTypeView returns the contract's RequestType for t (MCP adapter).
+func RequestTypeView(t requesttypes.Type) any { return toRequestType(t) }
 
 type createRequestTypeBody struct {
 	Name string `json:"name" doc:"1 to 60 characters; unique in the project (case-insensitive), also among inactive types."`

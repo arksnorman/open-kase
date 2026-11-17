@@ -158,7 +158,8 @@ Ticket results carry `requestType` `{ id, code, name }`; integrations map by `co
 `requestTypesList` (read-only, open to users and any token) lists the types with their `code`. Send a code as
 `requestTypeCode` (or an ID as `requestTypeId`, not both) to `ticketsCreate`, `ticketsUpdate`, `ticketsFollowUp` and
 `ticketsCopy`, and as `requestTypeCode` to filter `ticketsList`. The type must be active (otherwise `validationFailed` on
-the field you sent: `inactive` or `notFound`); without either field a new ticket gets the first active request type.
+the field you sent: `inactive` or `notFound`), except that `ticketsUpdate` naming the type the ticket already has changes
+nothing; without either field a new ticket gets the first active request type.
 There are no tools to manage request types: that is for admins in the web app and the REST API.
 
 Scheduled sending, watchers and links are not available through MCP (REST only, signed-in users).
